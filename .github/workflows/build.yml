@@ -1,0 +1,93 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write        # create the GitHub Release on tags
+      id-token: write        # build provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart("v") } else { $v = "0.0.0-ci" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Publish (self-contained single file)
+        shell: pwsh
+        run: |
+          dotnet publish src/Gridify.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true -p:DebugType=none `
+            -p:Version=${{ steps.ver.outputs.version }} -o dist/build
+
+      - name: Portable package
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $pkg = "dist/Gridify-$v-win-x64-portable"
+          New-Item -ItemType Directory -Force "$pkg/data" | Out-Null
+          Copy-Item dist/build/Gridify.exe $pkg
+          New-Item "$pkg/portable.flag" -ItemType File | Out-Null
+          Copy-Item scripts/portable/* $pkg
+          Copy-Item LICENSE, docs/PRIVACY.md $pkg
+          Compress-Archive -Path "$pkg/*" -DestinationPath "dist/Gridify-$v-win-x64-portable.zip"
+
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc /Qp "/DAppVersion=${{ steps.ver.outputs.version }}" installer/Gridify.iss
+
+      - name: SHA256 checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/*.zip, dist/*.exe | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gridify-${{ steps.ver.outputs.version }}
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+            dist/SHA256SUMS.txt
+
+      - name: Attest build provenance
+        if: github.ref_type == 'tag'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.zip
+            dist/*-setup.exe
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*-setup.exe
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
