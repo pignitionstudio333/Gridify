@@ -10,8 +10,10 @@ A lightweight desktop organizer for Windows 10/11. Group your desktop icons into
 - **Reference mode** – grids only remember file paths. Your originals stay exactly where they are.
 - **Desktop takeover (optional)** – hides the Windows icon layer and shows your desktop items in grids instead. Always restored on exit, logoff, crash or uninstall.
 - **Drag & drop** – drop files in, drag items between grids, reorder inside a grid, collapse a grid by double-clicking its title.
+- **Tabs** – every grid can have tabs; drag a tab to reorder it or move it (with its items) into another grid.
+- **Undo / redo** – Ctrl+Z / Ctrl+Y for grid, tab and item changes (never touches your files).
 - **Appearance** – icon size, opacity, color, acrylic blur, shadow, animations (all can be switched off for performance).
-- **Auto-organize** – one click sorts the desktop into Apps, Folders, Documents and Media grids.
+- **Auto-organize** – one click sorts the desktop into Apps, Folders, Documents and Media tabs (or grids).
 - **English / 繁體中文** UI.
 - **No telemetry, no network, no admin rights.**
 
@@ -38,7 +40,9 @@ The full source code is in this repository and the releases are built by GitHub 
 ## Usage
 - Drag files/folders from the desktop or Explorer into a grid.
 - Double-click an item to open it. Right-click for open location, rename, remove from grid, delete (Recycle Bin).
-- Drag the title bar to move a grid, the bottom-right corner to resize it.
+- Drag empty space in the title bar to move a grid, the bottom-right corner to resize it.
+- Click **+** in the title bar to add a tab. Double-click a tab to rename it, right-click for more, drag it to reorder or into another grid. Dropping items on a tab puts them there.
+- **Ctrl+Z** / **Ctrl+Y** undo and redo changes to grids, tabs and which items belong where (works while a grid window is focused).
 - Tray icon: show/hide all, take over desktop, appearance, organize by type, language, start with Windows, uninstall, quit.
 - Hold **Shift** while starting for **safe mode** (the desktop is not taken over).
 - Language changes apply after restarting Gridify.

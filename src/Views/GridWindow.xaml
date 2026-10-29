@@ -130,6 +130,13 @@
                     <MenuItem.Icon><TextBlock Style="{StaticResource Glyph}" Text="&#xE74D;"/></MenuItem.Icon>
                 </MenuItem>
                 <Separator/>
+                <MenuItem Header="{l:T menu.newTab}" Tag="newtab" Click="Menu_NewTab"/>
+                <MenuItem Header="{l:T menu.renameTab}" Tag="tabmulti" Click="Menu_RenameTab"/>
+                <MenuItem Header="{l:T menu.deleteTab}" Tag="tabmulti" Click="Menu_DeleteTab"/>
+                <Separator/>
+                <MenuItem Header="{l:T menu.undo}" Tag="undo" Click="Menu_Undo" InputGestureText="Ctrl+Z"/>
+                <MenuItem Header="{l:T menu.redo}" Tag="redo" Click="Menu_Redo" InputGestureText="Ctrl+Y"/>
+                <Separator/>
                 <MenuItem Header="{l:T menu.iconSize}">
                     <MenuItem.Icon><TextBlock Style="{StaticResource Glyph}" Text="&#xE8A3;"/></MenuItem.Icon>
                     <MenuItem Header="{l:T size.small}" Tag="24" Click="Menu_IconSize"/>
@@ -154,10 +161,30 @@
             </Grid.RowDefinitions>
 
             <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent" AllowDrop="True"
-                  MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
+                  PreviewMouseLeftButtonDown="TitleBar_PreviewMouseLeftButtonDown"
                   MouseEnter="TitleBar_MouseEnter" MouseLeave="TitleBar_MouseLeave">
-                <TextBlock x:Name="TitleText" Margin="10,0" VerticalAlignment="Center"
+                <TextBlock x:Name="TitleText" Margin="10,0,64,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource Grid.TitleText}" FontWeight="SemiBold" FontSize="12"/>
+                <!-- 只有一個分頁時：標題列右側的 +，按下去變成兩個分頁 -->
+                <TextBlock x:Name="TabAddSingle" Text="+" FontSize="16" HorizontalAlignment="Right" VerticalAlignment="Center"
+                           Margin="0,0,30,0" Padding="8,0,8,2" Background="Transparent" Opacity="0.4" Cursor="Hand"
+                           Foreground="{DynamicResource Grid.TitleText}" ToolTip="{l:T menu.newTab}"
+                           MouseLeftButtonDown="TabAdd_MouseLeftButtonDown"/>
+                <Grid x:Name="TabStrip" Visibility="Collapsed" Margin="4,0,34,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ScrollViewer x:Name="TabScroll" Grid.Column="0" Background="Transparent"
+                                  HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="TabScroll_PreviewMouseWheel">
+                        <StackPanel x:Name="TabPanel" Orientation="Horizontal"/>
+                    </ScrollViewer>
+                    <TextBlock x:Name="TabAdd" Grid.Column="1" Text="+" FontSize="16" VerticalAlignment="Center"
+                               Padding="8,0,8,2" Background="Transparent" Opacity="0.7" Cursor="Hand"
+                               Foreground="{DynamicResource Grid.TitleText}" ToolTip="{l:T menu.newTab}"
+                               MouseLeftButtonDown="TabAdd_MouseLeftButtonDown"/>
+                </Grid>
                 <Border Height="1" VerticalAlignment="Bottom" Margin="8,0" Background="{DynamicResource Grid.Divider}"/>
                 <TextBlock x:Name="Chevron" Text="&#x25BE;" HorizontalAlignment="Right" VerticalAlignment="Center"
                            Margin="0,0,6,0" Padding="8,2" Background="Transparent" Opacity="0" Cursor="Hand"

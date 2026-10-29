@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -65,7 +67,13 @@ namespace GridifyApp
                 Changed = SyncDesktop,
                 IconStep = StepIconSize,
                 IconSet = SetIconSize,
-                Appearance = ShowAppearance
+                Appearance = ShowAppearance,
+                DeleteTab = DeleteTab,
+                Undo = DoUndo,
+                Redo = DoRedo,
+                CanUndo = () => _undo.Count > 0,
+                CanRedo = () => _redo.Count > 0,
+                MoveTabTo = MoveTabBetween
             };
 
             _cfg = ConfigStore.Load();
@@ -109,7 +117,7 @@ namespace GridifyApp
 
             startWatch.Stop();
             PerfLog.Write("startup: " + startWatch.ElapsedMilliseconds + "ms, fences " + _cfg.Grids.Count +
-                          ", items " + _cfg.Grids.Sum(f => f.Items.Count) + ", mem " + MemMb() + "MB");
+                          ", items " + _cfg.Grids.Sum(f => f.AllItems.Count()) + ", mem " + MemMb() + "MB");
             // 圖示在背景載入完之後再記一次記憶體
             var memTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
             memTimer.Tick += (s, a) => { memTimer.Stop(); PerfLog.Write("mem after 10s: " + MemMb() + "MB"); };
@@ -159,7 +167,149 @@ namespace GridifyApp
             base.OnExit(e);
         }
 
-        void SaveConfig() => ConfigStore.Save(_cfg);
+        void SaveConfig()
+        {
+            TrackUndo();
+            ConfigStore.Save(_cfg);
+        }
+
+        // ---------- 復原 / 重做 ----------
+        // 每次存檔時比對「結構」（收納區、分頁、項目的歸屬與名稱；不含位置、大小、折疊）。
+        // 結構有變，就把變動「之前」的狀態推進復原堆疊。桌面自動同步造成的變動不記錄；
+        // 檔案改名後會清空（舊路徑已不存在，還原會弄壞參照）。復原只動 Gridify 的設定，不動任何檔案。
+        readonly List<string> _undo = new List<string>();
+        readonly List<string> _redo = new List<string>();
+        string _lastKey, _lastFull;
+        bool _inSync, _restoring;
+        const int UndoMax = 30;
+
+        string StructKey()
+        {
+            var sb = new StringBuilder();
+            foreach (var g in _cfg.Grids)
+            {
+                var _x = g.ActiveTabData;
+                sb.Append(g.Id).Append('|').Append(g.Title).Append('|').Append(g.IsDefault ? '1' : '0').Append('\n');
+                foreach (var t in g.Tabs)
+                {
+                    sb.Append(' ').Append(t.Id).Append('|').Append(t.Name).Append('\n');
+                    if (t.Items != null) foreach (var p in t.Items) sb.Append("  ").Append(p).Append('\n');
+                }
+            }
+            return sb.ToString();
+        }
+
+        string Snapshot()
+        {
+            try { return JsonSerializer.Serialize(_cfg.Grids); } catch { return null; }
+        }
+
+        void TrackUndo()
+        {
+            if (_restoring) return;
+            try
+            {
+                string key = StructKey();
+                if (_lastKey == null) { _lastKey = key; _lastFull = Snapshot(); return; }
+                if (key == _lastKey) return;
+                if (!_inSync && _lastFull != null)
+                {
+                    _undo.Add(_lastFull);
+                    if (_undo.Count > UndoMax) _undo.RemoveAt(0);
+                    _redo.Clear();
+                }
+                _lastKey = key;
+                _lastFull = Snapshot();
+            }
+            catch (Exception ex) { PerfLog.Write("undo track failed: " + ex.Message); }
+        }
+
+        void ClearUndo()
+        {
+            _undo.Clear();
+            _redo.Clear();
+            _lastKey = null;
+            _lastFull = null;
+        }
+
+        void DoUndo()
+        {
+            if (_undo.Count == 0) return;
+            string cur = Snapshot();
+            string target = _undo[_undo.Count - 1];
+            _undo.RemoveAt(_undo.Count - 1);
+            if (RestoreSnapshot(target) && cur != null) _redo.Add(cur);
+        }
+
+        void DoRedo()
+        {
+            if (_redo.Count == 0) return;
+            string cur = Snapshot();
+            string target = _redo[_redo.Count - 1];
+            _redo.RemoveAt(_redo.Count - 1);
+            if (RestoreSnapshot(target) && cur != null)
+            {
+                _undo.Add(cur);
+                if (_undo.Count > UndoMax) _undo.RemoveAt(0);
+            }
+        }
+
+        /// <summary>把收納區 / 分頁 / 項目的歸屬還原成快照；現有收納區保留目前的位置、大小與折疊狀態，只有被刪掉的收納區會用快照裡的位置重建。</summary>
+        bool RestoreSnapshot(string json)
+        {
+            List<GridData> snap;
+            try { snap = JsonSerializer.Deserialize<List<GridData>>(json); }
+            catch (Exception ex) { PerfLog.Crash("undo-parse", ex); return false; }
+            if (snap == null) return false;
+
+            _restoring = true;
+            try
+            {
+                var keep = new List<GridData>();
+                var created = new List<GridData>();
+                foreach (var sg in snap)
+                {
+                    if (sg == null) continue;
+                    var _s = sg.ActiveTabData;
+                    var cg = _cfg.Grids.FirstOrDefault(g => g.Id == sg.Id);
+                    if (cg == null) { keep.Add(sg); created.Add(sg); continue; }
+
+                    string activeId = cg.ActiveTabData.Id;
+                    cg.Title = sg.Title;
+                    cg.IsDefault = sg.IsDefault;
+                    cg.Tabs = sg.Tabs;
+                    int ai = cg.Tabs.FindIndex(t => t.Id == activeId);   // 盡量停在原本選取的分頁
+                    cg.ActiveTab = ai >= 0 ? ai : sg.ActiveTab;
+                    var _c = cg.ActiveTabData;
+                    keep.Add(cg);
+                }
+
+                // 快照之後才新增的收納區：關閉
+                foreach (var cg in _cfg.Grids.ToList())
+                {
+                    if (snap.Any(s => s != null && s.Id == cg.Id)) continue;
+                    var w = _wins.FirstOrDefault(x => ReferenceEquals(x.Data, cg));
+                    if (w != null) { _wins.Remove(w); w.Close(); }
+                }
+
+                _cfg.Grids.Clear();
+                _cfg.Grids.AddRange(keep);
+                foreach (var g in created) OpenGrid(g);
+
+                ReloadAll();
+                ConfigStore.Save(_cfg);
+            }
+            catch (Exception ex) { PerfLog.Crash("undo-restore", ex); return false; }
+            finally
+            {
+                _restoring = false;
+                _lastKey = StructKey();
+                _lastFull = Snapshot();
+            }
+
+            if (_takeOverActive) SyncDesktop();   // 還原期間桌面若有新檔案或檔案消失，重新對齊
+            return true;
+        }
 
         // ---------- 當機防護 ----------
         void InstallCrashHandlers()
@@ -309,7 +459,7 @@ namespace GridifyApp
                 Loc.AppName, MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (r != MessageBoxResult.Yes) return;
 
-            var items = w.Data.Items.ToList();
+            var items = w.Data.AllItems.ToList();
             _cfg.Grids.Remove(w.Data);
             _wins.Remove(w);
             w.Close();
@@ -318,10 +468,115 @@ namespace GridifyApp
             {
                 var def = DefaultGrid();
                 foreach (var p in items)
-                    if (DesktopScanner.IsDesktopEntry(p) && !def.Items.Any(i => Same(i, p))) def.Items.Add(p);
+                    if (DesktopScanner.IsDesktopEntry(p) && !def.HasItem(p)) def.Items.Add(p);   // 全部回到「桌面」收納區目前的分頁
             }
             ReloadAll();
             SaveConfig();
+        }
+
+        /// <summary>刪除分頁：項目全部回到「桌面」收納區目前的分頁（只改項目屬於哪裡，不動任何檔案）。</summary>
+        void DeleteTab(GridWindow w, int index)
+        {
+            var d = w.Data;
+            var _active = d.ActiveTabData;
+            if (d.Tabs.Count <= 1 || index < 0 || index >= d.Tabs.Count) return;
+            var tab = d.Tabs[index];
+
+            // 「桌面」收納區：接管桌面時一定有；沒接管時只有它已經存在才有
+            GridData def = _cfg.TakeOver ? null : _cfg.Grids.FirstOrDefault(f => f.IsDefault);
+            if (_cfg.TakeOver) def = DefaultGrid();
+
+            string msg = def != null
+                ? Loc.F("tab.deleteConfirm", tab.DisplayName, def.Title)
+                : Loc.F("tab.deleteConfirm2", tab.DisplayName);
+            if (MessageBox.Show(msg, Loc.AppName, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+            var items = (tab.Items ?? new List<string>()).ToList();
+            d.Tabs.RemoveAt(index);
+            if (index < d.ActiveTab) d.ActiveTab--;
+            if (d.ActiveTab >= d.Tabs.Count) d.ActiveTab = d.Tabs.Count - 1;
+            if (d.ActiveTab < 0) d.ActiveTab = 0;
+            d.AdoptSingleTabName();   // 只剩一個分頁：收納區名稱改成剩下那個分頁的名稱
+
+            if (def != null)
+                foreach (var p in items)
+                    if (!def.HasItem(p)) def.Items.Add(p);
+
+            ReloadAll();
+            SaveConfig();
+        }
+
+        /// <summary>
+        /// 把分頁搬到另一個收納區（或同一個收納區內重新排序）。項目跟著分頁走，只改變「屬於哪裡」，不動任何檔案。
+        /// 來源收納區少了最後一個分頁：一般收納區會消失（項目都在分頁裡，沒有東西遺失）；「桌面」收納區會留下一個空分頁。
+        /// </summary>
+        void MoveTabBetween(GridWindow src, int srcIndex, GridWindow dst, int dstIndex)
+        {
+            try
+            {
+                var sd = src.Data; var dd = dst.Data;
+                var _a = sd.ActiveTabData; var _b = dd.ActiveTabData;
+                if (srcIndex < 0 || srcIndex >= sd.Tabs.Count) return;
+                var tab = sd.Tabs[srcIndex];
+
+                if (ReferenceEquals(sd, dd))
+                {
+                    // 同一收納區：重新排序
+                    int pos = Math.Max(0, Math.Min(sd.Tabs.Count, dstIndex));
+                    sd.Tabs.RemoveAt(srcIndex);
+                    if (pos > srcIndex) pos--;
+                    sd.Tabs.Insert(pos, tab);
+                    sd.ActiveTab = pos;
+                }
+                else
+                {
+                    if (dd.Tabs.Count >= 30) return;
+                    dd.InheritTitleForFirstTab();   // 目標收納區若原本只有一個分頁，先讓它保住原本的名稱
+
+                    // 目標收納區已經有的項目就不重複放
+                    tab.Items = (tab.Items ?? new List<string>()).Where(p => !dd.HasItem(p)).ToList();
+
+                    // 名稱和目標收納區的分頁重複時，加上編號
+                    string name = tab.DisplayName;
+                    if (dd.Tabs.Any(t => string.Equals(t.DisplayName, name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        int n = 2;
+                        string cand;
+                        do { cand = name + " (" + n++ + ")"; }
+                        while (dd.Tabs.Any(t => string.Equals(t.DisplayName, cand, StringComparison.OrdinalIgnoreCase)));
+                        tab.Name = cand;
+                    }
+
+                    sd.Tabs.RemoveAt(srcIndex);
+                    bool closeSource = false;
+                    if (sd.Tabs.Count == 0)
+                    {
+                        if (sd.IsDefault) sd.Tabs.Add(new TabData());   // 「桌面」收納區不能消失
+                        else closeSource = true;
+                    }
+                    else
+                    {
+                        if (srcIndex < sd.ActiveTab) sd.ActiveTab--;
+                        if (sd.ActiveTab >= sd.Tabs.Count) sd.ActiveTab = sd.Tabs.Count - 1;
+                        if (sd.ActiveTab < 0) sd.ActiveTab = 0;
+                        sd.AdoptSingleTabName();   // 來源只剩一個分頁：收納區名稱改成剩下那個分頁的名稱
+                    }
+
+                    int pos = Math.Max(0, Math.Min(dd.Tabs.Count, dstIndex));
+                    dd.Tabs.Insert(pos, tab);
+                    dd.ActiveTab = pos;
+
+                    if (closeSource)
+                    {
+                        _cfg.Grids.Remove(sd);
+                        _wins.Remove(src);
+                        src.Close();
+                    }
+                }
+                ReloadAll();
+                SaveConfig();
+            }
+            catch (Exception ex) { PerfLog.Crash("movetab", ex); }
         }
 
         GridData DefaultGrid()
@@ -348,10 +603,11 @@ namespace GridifyApp
         {
             foreach (var p in paths)
             {
-                if (target.Data.Items.Any(i => Same(i, p))) continue;
+                if (target.Data.Items.Any(i => Same(i, p))) continue;   // 已經在目前分頁
+                target.Data.RemoveItems(i => Same(i, p));               // 在同一收納區的其他分頁 → 視為移到目前分頁
                 if (DesktopScanner.IsDesktopEntry(p))
                     foreach (var f in _cfg.Grids)
-                        if (f != target.Data) f.Items.RemoveAll(i => Same(i, p));   // 桌面項目只屬於一個收納區
+                        if (f != target.Data) f.RemoveItems(i => Same(i, p));   // 桌面項目只屬於一個收納區
                 target.Data.Items.Add(p);
             }
             ReloadAll();
@@ -362,11 +618,11 @@ namespace GridifyApp
         {
             foreach (var p in paths)
             {
-                src.Data.Items.RemoveAll(i => Same(i, p));
+                src.Data.RemoveItems(i => Same(i, p));
                 if (_cfg.TakeOver && DesktopScanner.IsDesktopEntry(p))
                 {
                     var def = DefaultGrid();
-                    if (!def.Items.Any(i => Same(i, p))) def.Items.Add(p);
+                    if (!def.HasItem(p)) def.Items.Add(p);
                 }
             }
             ReloadAll();
@@ -375,9 +631,8 @@ namespace GridifyApp
 
         void OnRenamed(string oldPath, string newPath)
         {
-            foreach (var f in _cfg.Grids)
-                for (int i = 0; i < f.Items.Count; i++)
-                    if (Same(f.Items[i], oldPath)) f.Items[i] = newPath;
+            ClearUndo();   // 檔案改名後，舊路徑已不存在，往回復原會弄壞參照
+            foreach (var f in _cfg.Grids) f.ReplaceItem(oldPath, newPath);
             ReloadAll();
             SaveConfig();
             SyncDesktop();
@@ -407,6 +662,13 @@ namespace GridifyApp
         /// <summary>把桌面（個人 + 公共 + 系統圖示）與收納區對齊：新項目進「桌面」收納區、消失的項目從收納區移除。</summary>
         void SyncDesktop()
         {
+            _inSync = true;   // 桌面自動同步造成的變動不算使用者的動作，不進復原堆疊
+            try { SyncDesktopCore(); }
+            finally { _inSync = false; }
+        }
+
+        void SyncDesktopCore()
+        {
             if (!_takeOverActive) return;
 
             var syncWatch = Stopwatch.StartNew();
@@ -415,7 +677,7 @@ namespace GridifyApp
             var def = DefaultGrid();
 
             var assigned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var f in _cfg.Grids) foreach (var p in f.Items) assigned.Add(p);
+            foreach (var f in _cfg.Grids) foreach (var p in f.AllItems) assigned.Add(p);
 
             bool changed = false;
             foreach (var p in scan)
@@ -425,7 +687,7 @@ namespace GridifyApp
             // 避免暫時讀不到桌面就把使用者排好的收納區清空。
             if (complete)
                 foreach (var f in _cfg.Grids)
-                    if (f.Items.RemoveAll(p => DesktopScanner.IsDesktopEntry(p) && !scanSet.Contains(p) && !StillExists(p)) > 0) changed = true;
+                    if (f.RemoveItems(p => DesktopScanner.IsDesktopEntry(p) && !scanSet.Contains(p) && !StillExists(p)) > 0) changed = true;
 
             if (changed)
             {
@@ -494,9 +756,11 @@ namespace GridifyApp
                 MessageBox.Show(Loc.T("cat.needTakeover"), Loc.AppName);
                 return;
             }
+            // 是 = 在「桌面」收納區裡分成分頁（建議）；否 = 分成多個收納區（舊做法）；取消 = 不做
             var ask = MessageBox.Show(Loc.T("cat.confirm"),
-                Loc.AppName, MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (ask != MessageBoxResult.Yes) return;
+                Loc.AppName, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (ask == MessageBoxResult.Cancel) return;
+            if (ask == MessageBoxResult.Yes) { CategorizeIntoTabs(DefaultGrid()); return; }
 
             var def = DefaultGrid();
             var wa = SystemParameters.WorkArea;
@@ -523,6 +787,52 @@ namespace GridifyApp
                 def.Items.RemoveAll(i => Same(i, p));
                 cf.Items.Add(p);
             }
+            ReloadAll();
+            SaveConfig();
+        }
+
+        /// <summary>
+        /// 把「桌面」收納區目前分頁裡的項目，依類型分到同一個收納區的分頁（應用程式與捷徑、資料夾、文件、圖片與影音）。
+        /// 只改變項目屬於哪個分頁；分不出類型的項目（系統圖示、其他檔案）留在原本的分頁，並命名為「其他」。
+        /// </summary>
+        void CategorizeIntoTabs(GridData def)
+        {
+            var src = def.ActiveTabData;
+            var cats = new[] { Loc.T("cat.apps"), Loc.T("cat.folders"), Loc.T("cat.docs"), Loc.T("cat.media") };
+            var buckets = new Dictionary<string, List<string>>();
+            foreach (var c in cats) buckets[c] = new List<string>();
+            foreach (var p in src.Items.ToList())
+            {
+                string cat = Categorize(p);
+                if (cat != null && buckets.ContainsKey(cat)) buckets[cat].Add(p);
+            }
+            if (buckets.Values.All(b => b.Count == 0))
+            {
+                MessageBox.Show(Loc.T("cat.nothing"), Loc.AppName);
+                return;
+            }
+
+            foreach (var c in cats)
+            {
+                var list = buckets[c];
+                if (list.Count == 0) continue;
+                var tab = def.Tabs.FirstOrDefault(t => !ReferenceEquals(t, src) &&
+                                                       string.Equals(t.DisplayName, c, StringComparison.OrdinalIgnoreCase));
+                if (tab == null)
+                {
+                    if (def.Tabs.Count >= 30) continue;
+                    tab = new TabData { Name = c };
+                    def.Tabs.Insert(def.Tabs.IndexOf(src), tab);   // 新分頁都排在原本那個分頁前面
+                }
+                foreach (var p in list)
+                {
+                    src.Items.RemoveAll(i => Same(i, p));
+                    if (!tab.Items.Any(i => Same(i, p))) tab.Items.Add(p);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(src.Name)) src.Name = Loc.T("cat.other");
+            def.ActiveTab = def.Tabs.IndexOf(src);   // 之後桌面新增的檔案會進到這個分頁
             ReloadAll();
             SaveConfig();
         }
@@ -635,6 +945,13 @@ namespace GridifyApp
             };
             menu.Items.Add(take);
 
+            var undoItem = new System.Windows.Forms.ToolStripMenuItem(Loc.T("tray.undo"));
+            undoItem.Click += (s, a) => DoUndo();
+            var redoItem = new System.Windows.Forms.ToolStripMenuItem(Loc.T("tray.redo"));
+            redoItem.Click += (s, a) => DoRedo();
+            menu.Items.Add(undoItem);
+            menu.Items.Add(redoItem);
+            menu.Opening += (s, a) => { undoItem.Enabled = _undo.Count > 0; redoItem.Enabled = _redo.Count > 0; };
             menu.Items.Add(Loc.T("tray.appearance"), null, (s, a) => ShowAppearance());
             menu.Items.Add(Loc.T("tray.categorize"), null, (s, a) => AutoCategorize());
             menu.Items.Add(Loc.T("tray.refresh"), null, (s, a) => SyncDesktop());

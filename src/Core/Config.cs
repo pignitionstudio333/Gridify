@@ -12,6 +12,18 @@ using Microsoft.Win32;
 
 namespace GridifyApp
 {
+    /// <summary>收納區裡的一個分頁：有自己的項目清單。</summary>
+    public class TabData
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        /// <summary>空白代表「自動名稱」，顯示時依目前語言決定（分頁 1 / Tab 1）。</summary>
+        public string Name { get; set; } = "";
+        public List<string> Items { get; set; } = new List<string>();
+
+        [JsonIgnore]
+        public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Loc.T("tab.defaultName") : Name;
+    }
+
     public class GridData
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -22,7 +34,103 @@ namespace GridifyApp
         public double Width { get; set; } = 320;
         public double Height { get; set; } = 240;
         public bool Collapsed { get; set; }
-        public List<string> Items { get; set; } = new List<string>();
+
+        public List<TabData> Tabs { get; set; } = new List<TabData>();
+        public int ActiveTab { get; set; }
+
+        // 相容舊版：舊設定檔只有一份 "Items"（沒有分頁）。讀取時暫存起來，第一次用到分頁時轉成單一分頁；
+        // 寫出時固定輸出「所有分頁項目的合併」，讓舊版程式讀到新設定檔也不會變空。
+        List<string> _legacyItems;
+        [JsonPropertyName("Items")]
+        public List<string> LegacyItems
+        {
+            get
+            {
+                if (Tabs != null && Tabs.Count > 0)
+                    return Tabs.Where(t => t != null && t.Items != null).SelectMany(t => t.Items).ToList();
+                return _legacyItems;
+            }
+            set { _legacyItems = value; }
+        }
+        List<string> TakeLegacyItems() { var l = _legacyItems; _legacyItems = null; return l; }
+
+        /// <summary>目前選取的分頁（一定存在；舊資料會在這裡自動轉成單一分頁）。</summary>
+        [JsonIgnore]
+        public TabData ActiveTabData
+        {
+            get
+            {
+                if (Tabs == null) Tabs = new List<TabData>();
+                Tabs.RemoveAll(t => t == null);
+                if (Tabs.Count == 0)
+                    Tabs.Add(new TabData { Items = TakeLegacyItems() ?? new List<string>() });
+                if (ActiveTab < 0 || ActiveTab >= Tabs.Count) ActiveTab = 0;
+                return Tabs[ActiveTab];
+            }
+        }
+
+        /// <summary>目前分頁的項目（舊程式碼沿用這個名稱）。</summary>
+        [JsonIgnore]
+        public List<string> Items
+        {
+            get { var t = ActiveTabData; if (t.Items == null) t.Items = new List<string>(); return t.Items; }
+            set { ActiveTabData.Items = value ?? new List<string>(); }
+        }
+
+        /// <summary>所有分頁的項目。</summary>
+        [JsonIgnore]
+        public IEnumerable<string> AllItems
+        {
+            get
+            {
+                var _ = ActiveTabData;
+                return Tabs.Where(t => t.Items != null).SelectMany(t => t.Items);
+            }
+        }
+
+        /// <summary>
+        /// 從「只有一個分頁」變成多個分頁之前呼叫：標題列會從收納區名稱改顯示分頁標籤，
+        /// 所以第一個分頁（還是自動名稱的話）先沿用收納區原本的名稱，使用者看到的名字才不會變。
+        /// </summary>
+        public void InheritTitleForFirstTab()
+        {
+            var _t = ActiveTabData;
+            if (Tabs.Count == 1 && string.IsNullOrWhiteSpace(Tabs[0].Name)) Tabs[0].Name = Title;
+        }
+
+        /// <summary>
+        /// 回到「只有一個分頁」之後呼叫：標題列改顯示收納區名稱，這時收納區名稱沿用剩下那個分頁的名稱，
+        /// 名字才會跟使用者剛剛看到的一致。「桌面」收納區和自動名稱的分頁不改。
+        /// </summary>
+        public void AdoptSingleTabName()
+        {
+            var _t = ActiveTabData;
+            if (Tabs.Count == 1 && !IsDefault && !string.IsNullOrWhiteSpace(Tabs[0].Name)) Title = Tabs[0].Name;
+        }
+
+        public bool HasItem(string path)
+        {
+            return AllItems.Any(i => string.Equals(i, path, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>從所有分頁移除符合條件的項目，回傳移除數量。</summary>
+        public int RemoveItems(Predicate<string> match)
+        {
+            var _ = ActiveTabData;
+            int n = 0;
+            foreach (var t in Tabs) if (t.Items != null) n += t.Items.RemoveAll(match);
+            return n;
+        }
+
+        /// <summary>檔案改名後，把所有分頁裡的舊路徑換成新路徑。</summary>
+        public void ReplaceItem(string oldPath, string newPath)
+        {
+            var _ = ActiveTabData;
+            foreach (var t in Tabs)
+                if (t.Items != null)
+                    for (int i = 0; i < t.Items.Count; i++)
+                        if (string.Equals(t.Items[i], oldPath, StringComparison.OrdinalIgnoreCase)) t.Items[i] = newPath;
+        }
     }
 
     /// <summary>外觀設定（全域，所有收納區共用）。</summary>
@@ -211,15 +319,33 @@ namespace GridifyApp
                 f.Width = Math.Min(5000, Math.Max(140, Finite(f.Width, 320)));
                 f.Height = Math.Min(5000, Math.Max(90, Finite(f.Height, 240)));
 
-                var own = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var clean = new List<string>();
-                foreach (var p in f.Items ?? new List<string>())
+                // 收合狀態下高度如果只剩最小值，多半是舊版把「收合高度」誤存成收納區高度，還原成預設高度
+                if (f.Collapsed && f.Height <= 90.5) f.Height = 240;
+
+                var _tab = f.ActiveTabData;   // 舊設定檔（只有 Items）在這裡自動轉成單一分頁
+                if (f.Tabs.Count > 30) f.Tabs.RemoveRange(30, f.Tabs.Count - 30);
+
+                var tabIds = new HashSet<string>();
+                var own = new HashSet<string>(StringComparer.OrdinalIgnoreCase);   // 同一個收納區內不重複（跨分頁）
+                foreach (var t in f.Tabs)
                 {
-                    if (string.IsNullOrWhiteSpace(p) || !own.Add(p)) continue;
-                    if (DesktopScanner.IsDesktopEntry(p) && !desktopSeen.Add(p)) continue;   // 桌面項目只能屬於一個收納區
-                    clean.Add(p);
+                    if (string.IsNullOrEmpty(t.Id) || !tabIds.Add(t.Id))
+                    {
+                        t.Id = Guid.NewGuid().ToString("N");
+                        tabIds.Add(t.Id);
+                    }
+                    if (t.Name == null) t.Name = "";   // 空白 = 自動名稱（顯示時依語言決定）
+
+                    var clean = new List<string>();
+                    foreach (var p in t.Items ?? new List<string>())
+                    {
+                        if (string.IsNullOrWhiteSpace(p) || !own.Add(p)) continue;
+                        if (DesktopScanner.IsDesktopEntry(p) && !desktopSeen.Add(p)) continue;   // 桌面項目只能屬於一個收納區
+                        clean.Add(p);
+                    }
+                    t.Items = clean;
                 }
-                f.Items = clean;
+                if (f.ActiveTab < 0 || f.ActiveTab >= f.Tabs.Count) f.ActiveTab = 0;
             }
         }
 
