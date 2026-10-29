@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 - 2026-10-29
+### Fixed (critical)
+- **Critical bug in 1.1.0 and earlier: right-clicking an icon inside a grid showed only Gridify's own menu, so Windows functions were missing** (Empty Recycle Bin, Properties, Run as administrator, Send to, 7-Zip, ...). Icons now show the normal Windows context menu with a few Gridify entries at the bottom (Shift+right-click for the extended menu). Right-clicking empty space in a grid still shows the Gridify menu. **Everyone on 1.0.0 / 1.1.0 should update.**
+
 ## 1.1.0 - 2026-10-29
 ### Added
 - **Tabs inside grids.** Click the `+` in a grid's title bar (or right-click > New tab). With two or more tabs the title bar shows the tab labels; with one tab it looks as before. Double-click a tab to rename it, right-click for move left/right and delete, scroll the mouse wheel over the tabs when there are many.

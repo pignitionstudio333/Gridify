@@ -1,6 +1,6 @@
-; Gridify installer (Inno Setup 6). Build: ISCC.exe /DAppVersion=1.1.0 installer\Gridify.iss
+; Gridify installer (Inno Setup 6). Build: ISCC.exe /DAppVersion=1.1.1 installer\Gridify.iss
 #ifndef AppVersion
-  #define AppVersion "1.1.0"
+  #define AppVersion "1.1.1"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\dist\build"

@@ -719,6 +719,80 @@ namespace GridifyApp
                 Native.SetForegroundWindow(new WindowInteropHelper(this).Handle);
             }
             catch { }
+
+            // 在圖示上按右鍵：顯示 Windows 原生選單（開啟、內容、清空資源回收筒…），最下面附上 Gridify 的項目
+            try
+            {
+                var li = FindListBoxItem(e.OriginalSource as DependencyObject);
+                if (li != null && li.DataContext is GridItem clicked && ShowNativeMenu(li, clicked, e))
+                    e.Handled = true;
+            }
+            catch (Exception ex) { PerfLog.Write("native menu: " + ex.Message); }
+        }
+
+        static ListBoxItem FindListBoxItem(DependencyObject d)
+        {
+            while (d != null)
+            {
+                if (d is ListBoxItem li) return li;
+                d = (d is Visual || d is System.Windows.Media.Media3D.Visual3D)
+                    ? VisualTreeHelper.GetParent(d)
+                    : LogicalTreeHelper.GetParent(d);
+            }
+            return null;
+        }
+
+        bool ShowNativeMenu(ListBoxItem li, GridItem clicked, ContextMenuEventArgs e)
+        {
+            string Key(GridItem i) => i.IsSpecial ? "shell:" : (Path.GetDirectoryName(i.FullPath.TrimEnd('\\', '/')) ?? "");
+            var sel = SelectedItems();
+            if (!sel.Contains(clicked)) sel = new System.Collections.Generic.List<GridItem> { clicked };
+
+            // 外殼選單一次只能處理同一個資料夾裡的項目：取和被點項目同資料夾的那些
+            string k = Key(clicked);
+            var group = sel.Where(i => string.Equals(Key(i), k, StringComparison.OrdinalIgnoreCase)).ToList();
+            var paths = group.Select(i => i.IsSpecial ? i.FullPath.Substring("shell:".Length) : i.FullPath).ToList();
+
+            bool anySpecial = sel.Any(i => i.IsSpecial);
+            bool allDesktopInDefault = _data.IsDefault && sel.All(i => DesktopScanner.IsDesktopEntry(i.FullPath));
+            var extras = new System.Collections.Generic.List<ShellMenuExtra>
+            {
+                new ShellMenuExtra { Text = Loc.T("menu.moveOut"), Enabled = !allDesktopInDefault, Run = () => Menu_MoveOut(null, null) },
+                new ShellMenuExtra { Text = Loc.T("menu.openLocation"), Enabled = !anySpecial, Run = () => Menu_OpenLocation(null, null) },
+                new ShellMenuExtra { Text = Loc.T("menu.renameFile"), Enabled = sel.Count == 1 && !anySpecial, Run = () => RenameSelectedFile() },
+                new ShellMenuExtra { Text = Loc.T("menu.moreGridify"), Run = ShowGridMenu },
+            };
+
+            int x, y;
+            if (e.CursorLeft >= 0)
+            {
+                var cp = System.Windows.Forms.Cursor.Position;
+                x = cp.X; y = cp.Y;
+            }
+            else
+            {
+                var p = li.PointToScreen(new Point(li.ActualWidth / 2, li.ActualHeight / 2));   // 用鍵盤（選單鍵）開啟時
+                x = (int)p.X; y = (int)p.Y;
+            }
+
+            bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;   // Shift+右鍵：顯示更多選項（和檔案總管一樣）
+            return ShellMenu.Show(new WindowInteropHelper(this).Handle, paths, extras, x, y, shift);
+        }
+
+        /// <summary>從原生選單的「更多 Gridify 選項」打開 Gridify 自己的收納區選單。</summary>
+        void ShowGridMenu()
+        {
+            var cm = Root.ContextMenu;
+            if (cm == null) return;
+            try
+            {
+                Activate();
+                Native.SetForegroundWindow(new WindowInteropHelper(this).Handle);
+            }
+            catch { }
+            cm.PlacementTarget = Root;
+            cm.Placement = PlacementMode.MousePoint;
+            cm.IsOpen = true;
         }
 
         void Menu_Opened(object sender, RoutedEventArgs e)
