@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 1.0.0 - 2026-10-29
 First public release (renamed from the private "Fence" tool).
 
 - Reference-mode desktop grids: drag files in, nothing is moved or copied.
