@@ -126,7 +126,7 @@
                 <MenuItem Header="{l:T menu.newGrid}" Click="Menu_New">
                     <MenuItem.Icon><TextBlock Style="{StaticResource Glyph}" Text="&#xE710;"/></MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="{l:T menu.deleteGrid}" Tag="fencedelete" Click="Menu_Delete">
+                <MenuItem Header="{l:T menu.deleteGrid}" Tag="griddelete" Click="Menu_Delete">
                     <MenuItem.Icon><TextBlock Style="{StaticResource Glyph}" Text="&#xE74D;"/></MenuItem.Icon>
                 </MenuItem>
                 <Separator/>
@@ -221,6 +221,11 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
+
+            <!-- 重新命名：像檔案總管一樣直接在圖示下方編輯 -->
+            <TextBox x:Name="ItemEditBox" Grid.Row="1" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Top"
+                     TextWrapping="Wrap" TextAlignment="Center" AcceptsReturn="False" MaxHeight="64"
+                     LostFocus="ItemEdit_LostFocus" PreviewKeyDown="ItemEdit_KeyDown"/>
 
             <Border x:Name="DropHint" Grid.RowSpan="2" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="8"
                     BorderBrush="#FF4C9AFF" BorderThickness="2" Background="#224C9AFF">

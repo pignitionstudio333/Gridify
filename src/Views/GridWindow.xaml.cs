@@ -59,6 +59,8 @@ namespace GridifyApp
             [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i);
             [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr h, int i, int v);
             [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+            [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+            [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
             [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
             [StructLayout(LayoutKind.Sequential)]
@@ -106,6 +108,7 @@ namespace GridifyApp
         public GridWindow(GridData data, GridHost host)
         {
             InitializeComponent();
+            Deactivated += Window_Deactivated;
             _data = data;
             _host = host;
 
@@ -439,10 +442,48 @@ namespace GridifyApp
             return null;
         }
 
+        /// <summary>
+        /// 點到收納區外面（桌面、工作列、其他程式、另一個收納區）就取消選取。
+        /// 右鍵選單、對話框、設定視窗都是 Gridify 自己的視窗，不算外面，所以選單操作不會失去選取。
+        /// 稍等一下再看前景視窗是誰，避免切換瞬間誤判。
+        /// </summary>
+        void Window_Deactivated(object sender, EventArgs e)
+        {
+            if (List.SelectedItems.Count == 0) return;
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            t.Tick += (s, a) =>
+            {
+                t.Stop();
+                try { if (!IsActive && ForegroundIsOutside()) List.UnselectAll(); } catch { }
+            };
+            t.Start();
+        }
+
+        bool ForegroundIsOutside()
+        {
+            IntPtr fg = Native.GetForegroundWindow();
+            if (fg == IntPtr.Zero) return false;   // 視窗正在切換，先不動
+            Native.GetWindowThreadProcessId(fg, out uint pid);
+            if (pid != (uint)Environment.ProcessId) return true;   // 其他程式（含桌面與工作列）
+            foreach (var w in Application.Current.Windows.OfType<GridWindow>())
+                if (!ReferenceEquals(w, this) && new WindowInteropHelper(w).Handle == fg) return true;   // 另一個收納區
+            return false;   // 自己的選單、對話框、設定視窗
+        }
+
         void List_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             _dragStart = e.GetPosition(null);
             _dragArmed = FindItem(e.OriginalSource as DependencyObject) != null;
+
+            // 點在空白處：取消選取（和檔案總管一樣；按住 Ctrl / Shift 時不動，點捲軸也不動）
+            if (!_dragArmed && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0)
+            {
+                bool onScrollBar = false;
+                for (var d = e.OriginalSource as DependencyObject; d != null && !ReferenceEquals(d, List);
+                     d = (d is Visual || d is System.Windows.Media.Media3D.Visual3D) ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+                    if (d is ScrollBar) { onScrollBar = true; break; }
+                if (!onScrollBar) List.UnselectAll();
+            }
         }
 
         void List_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -505,61 +546,101 @@ namespace GridifyApp
         }
 
         // ---------- 檔案操作 ----------
-        void RenameSelectedFile()
+        void RenameSelectedFile() => BeginRenameItem();
+
+        string _editPath;
+        bool _editDone = true;
+
+        static double ResD(string key, double def)
+        {
+            try { return Convert.ToDouble(Application.Current.TryFindResource(key) ?? def); }
+            catch { return def; }
+        }
+
+        /// <summary>F2：像檔案總管一樣，直接在圖示下方編輯檔名（只選取主檔名，不選副檔名）。</summary>
+        void BeginRenameItem()
         {
             var sel = SelectedItems();
             if (sel.Count != 1 || sel[0].IsSpecial) return;
-            string old = sel[0].FullPath;
-            bool isDir = Directory.Exists(old);
-            var dlg = new PromptWindow(Loc.T("rename.title"), Loc.T("rename.prompt"), Path.GetFileName(old));
-            if (dlg.ShowDialog() != true) return;
-            string name = dlg.Value.Trim();
-            if (name.Length == 0 || name == Path.GetFileName(old)) return;
+            var item = sel[0];
+            if (!(List.ItemContainerGenerator.ContainerFromItem(item) is FrameworkElement c)) return;
+            try
+            {
+                Activate();
+                c.BringIntoView();
+                List.UpdateLayout();
+                Rect r = c.TransformToAncestor(List).TransformBounds(new Rect(0, 0, c.ActualWidth, c.ActualHeight));
+                double icon = ResD("Grid.IconSize", 32), cell = Math.Max(ResD("Grid.CellWidth", 80), 70);
+
+                _editPath = item.FullPath;
+                _editDone = false;
+                string name = Path.GetFileName(_editPath.TrimEnd('\\', '/'));
+                ItemEditBox.Text = name;
+                ItemEditBox.Width = cell;
+                ItemEditBox.Margin = new Thickness(6 + r.Left + (r.Width - cell) / 2, 4 + r.Top + 6 + icon + 2, 0, 0);
+                ItemEditBox.Visibility = Visibility.Visible;
+                bool isDir = Directory.Exists(_editPath);
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ItemEditBox.Focus();
+                    ItemEditBox.Select(0, isDir ? name.Length : Path.GetFileNameWithoutExtension(name).Length);
+                }), DispatcherPriority.Input);
+            }
+            catch (Exception ex) { PerfLog.Write("rename edit: " + ex.Message); _editDone = true; ItemEditBox.Visibility = Visibility.Collapsed; }
+        }
+
+        void ItemEdit_LostFocus(object sender, RoutedEventArgs e) => EndItemEdit(true);
+
+        void ItemEdit_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter) { e.Handled = true; EndItemEdit(true); }
+            else if (e.Key == Key.Escape) { e.Handled = true; EndItemEdit(false); }
+        }
+
+        void EndItemEdit(bool commit)
+        {
+            if (_editDone || ItemEditBox.Visibility != Visibility.Visible) return;
+            _editDone = true;
+            string old = _editPath;
+            string name = ItemEditBox.Text.Trim();
+            ItemEditBox.Visibility = Visibility.Collapsed;
+            Dispatcher.BeginInvoke(new Action(() => List.Focus()), DispatcherPriority.Input);
+            if (!commit || string.IsNullOrEmpty(old) || name.Length == 0 || name == Path.GetFileName(old.TrimEnd('\\', '/'))) return;
+
             if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             {
                 MessageBox.Show(Loc.T("rename.invalid"), Loc.AppName);
                 return;
             }
-            string dest = Path.Combine(Path.GetDirectoryName(old), name);
-            try
+            bool isDir = Directory.Exists(old);
+            if (!isDir && !string.Equals(Path.GetExtension(name), Path.GetExtension(old), StringComparison.OrdinalIgnoreCase))
             {
-                if (File.Exists(dest) || Directory.Exists(dest)) { MessageBox.Show(Loc.T("rename.exists"), Loc.AppName); return; }
-                if (isDir) Directory.Move(old, dest); else File.Move(old, dest);
+                // 和檔案總管一樣：改副檔名前先警告
+                if (MessageBox.Show(Loc.T("rename.extWarn"), Loc.AppName, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
             }
-            catch (Exception ex)
+            string dest = Path.Combine(Path.GetDirectoryName(old.TrimEnd('\\', '/')), name);
+            bool caseOnly = string.Equals(old, dest, StringComparison.OrdinalIgnoreCase);
+            if (!caseOnly && (File.Exists(dest) || Directory.Exists(dest)))
             {
-                MessageBox.Show(Loc.F("rename.fail", ex.Message), Loc.AppName);
+                MessageBox.Show(Loc.T("rename.exists"), Loc.AppName);
                 return;
             }
-            _host.Renamed(old, dest);
+            ShellFileOp.Rename(new WindowInteropHelper(this).Handle, old, dest);   // 錯誤由 Windows 自己顯示
+            if (File.Exists(dest) || Directory.Exists(dest)) _host.Renamed(old, dest);
         }
 
+        /// <summary>Delete：交給 Windows 刪除（移到資源回收筒，確認視窗依你的 Windows 設定）；Shift+Delete 永久刪除。</summary>
         void DeleteSelectedFiles()
         {
             var sel = SelectedItems().Where(i => !i.IsSpecial).ToList();
             if (sel.Count == 0) return;
-            string names = string.Join("\n", sel.Take(8).Select(i => "  • " + i.Name)) + (sel.Count > 8 ? "\n  …" : "");
-            if (MessageBox.Show(Loc.F("delete.confirm", sel.Count, names), Loc.AppName,
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            bool permanent = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+            var existing = sel.Select(i => i.FullPath).Where(p => File.Exists(p) || Directory.Exists(p)).ToList();
+            if (existing.Count > 0)
+                ShellFileOp.Delete(new WindowInteropHelper(this).Handle, existing, !permanent);
 
-            var gone = new System.Collections.Generic.List<string>();
-            foreach (var i in sel)
-            {
-                try
-                {
-                    if (Directory.Exists(i.FullPath))
-                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(i.FullPath,
-                            Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                    else
-                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(i.FullPath,
-                            Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                    gone.Add(i.FullPath);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(Loc.F("delete.fail", i.Name, ex.Message), Loc.AppName);
-                }
-            }
+            // 檔案真的不在了（刪掉了，或本來就找不到）才從收納區拿掉；使用者在 Windows 的對話框按了取消就什麼都不變
+            var gone = sel.Where(i => !File.Exists(i.FullPath) && !Directory.Exists(i.FullPath)).Select(i => i.FullPath).ToList();
             if (gone.Count == 0) return;
             foreach (var i in Items.Where(x => gone.Contains(x.FullPath)).ToList()) Items.Remove(i);
             PersistItems();
@@ -787,7 +868,6 @@ namespace GridifyApp
             {
                 new ShellMenuExtra { Text = Loc.T("menu.moveOut"), Enabled = !allDesktopInDefault, Run = () => Menu_MoveOut(null, null) },
                 new ShellMenuExtra { Text = Loc.T("menu.openLocation"), Enabled = !anySpecial, Run = () => Menu_OpenLocation(null, null) },
-                new ShellMenuExtra { Text = Loc.T("menu.renameFile"), Enabled = sel.Count == 1 && !anySpecial, Run = () => RenameSelectedFile() },
                 new ShellMenuExtra { Text = Loc.T("menu.moreGridify"), Run = ShowGridMenu },
             };
 
@@ -838,7 +918,7 @@ namespace GridifyApp
                     case "moveout": mi.IsEnabled = has && !allDesktopInDefault; break;
                     case "rename": mi.IsEnabled = sel.Count == 1 && !anySpecial; break;
                     case "delete": mi.IsEnabled = has && !anySpecial; break;
-                    case "fencedelete": mi.IsEnabled = !_data.IsDefault; break;
+                    case "griddelete": mi.IsEnabled = !_data.IsDefault; break;
                     case "undo": mi.IsEnabled = _host.CanUndo != null && _host.CanUndo(); break;
                     case "redo": mi.IsEnabled = _host.CanRedo != null && _host.CanRedo(); break;
                     case "newtab": mi.IsEnabled = _data.Tabs.Count < 30; break;

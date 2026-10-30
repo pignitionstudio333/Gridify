@@ -12,6 +12,7 @@ Or run `scripts\build.bat` (publishes to `publish\` and can start the app). `scr
 ## Ground rules
 - Reference mode: never move, copy or delete a user's original files (except an explicit delete to the Recycle Bin).
 - No system pollution: the only registry write allowed is the optional HKCU Run value.
+- Gridify only organizes. Don't re-implement what Windows already does for files (rename, delete, context menu, open): use the shell's own behavior.
 - No network access except the update check that the user triggers (or opts into). Never download or run code.
 - The hidden desktop icon layer must always be restored on exit, crash and uninstall.
 - All user-visible text goes through `Core\Loc.cs` (English and Traditional Chinese). Add the key to both dictionaries.

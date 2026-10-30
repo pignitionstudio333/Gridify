@@ -6,9 +6,9 @@ echo ==============================================
 echo   Gridify uninstall (development folder)
 echo ==============================================
 echo This will:
-echo   1. Stop the running Gridify (and the old Fence.exe, if any)
+echo   1. Stop the running Gridify
 echo   2. Restore desktop icons hidden by Gridify
-echo   3. Remove the auto-start entries (registry values Gridify / PignitionFence)
+echo   3. Remove the auto-start entries (registry value Gridify)
 echo   4. Delete the publish, dist, logs, bin, obj and data folders
 echo Your original files are never touched.
 echo.
@@ -20,13 +20,11 @@ if /i not "%OK%"=="Y" (
 )
 
 taskkill /f /im Gridify.exe >nul 2>&1
-taskkill /f /im Fence.exe >nul 2>&1
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v Gridify /f >nul 2>&1
-reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v PignitionFence /f >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 rem Restore hidden desktop icons first (must happen before data is deleted)
-for %%E in ("%ROOT%\publish\Gridify.exe" "%ROOT%\src\bin\Release\net10.0-windows\win-x64\Gridify.exe" "%ROOT%\publish\Fence.exe" "%ROOT%\src\bin\Release\net10.0-windows\win-x64\Fence.exe") do (
+for %%E in ("%ROOT%\publish\Gridify.exe" "%ROOT%\src\bin\Release\net10.0-windows\win-x64\Gridify.exe") do (
   if exist %%E (
     start /wait "" %%E --restore
     goto :restored

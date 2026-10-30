@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 
 namespace GridifyApp
@@ -61,6 +62,12 @@ namespace GridifyApp
                 Margin = new Thickness(0, 18, 0, 0)
             };
             root.Children.Add(auto);
+
+            var helpLine = new TextBlock { Margin = new Thickness(0, 12, 0, 0) };
+            var helpLink = new Hyperlink(new Run(Loc.T("w.help")));
+            helpLink.Click += (s, e) => new HelpWindow { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner }.ShowDialog();
+            helpLine.Inlines.Add(helpLink);
+            root.Children.Add(helpLine);
 
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 22, 0, 0) };
             var later = new Button { Content = Loc.T("w.later"), Height = 34, Padding = new Thickness(18, 0, 18, 0), Margin = new Thickness(0, 0, 10, 0), IsCancel = true };

@@ -8,7 +8,7 @@ What it stores, and where:
 
 | What | Where |
 |---|---|
-| Grid layout, appearance, language (`config.json`), backups, `crash.log`, `fence.log` | Portable build: the `data` folder next to `Gridify.exe`. Installed build: `%LOCALAPPDATA%\Gridify` |
+| Grid layout, appearance, language (`config.json`), backups, `crash.log`, `gridify.log` | Portable build: the `data` folder next to `Gridify.exe`. Installed build: `%LOCALAPPDATA%\Gridify` |
 | Optional "Start with Windows" entry (off by default) | One value named `Gridify` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
 | Native WPF libraries (single-file build only) | Extracted by the .NET runtime to a temporary folder under `%TEMP%\.net` |
 

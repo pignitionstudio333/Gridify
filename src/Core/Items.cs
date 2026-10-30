@@ -74,7 +74,7 @@ namespace GridifyApp
         static readonly BlockingCollection<(string Key, Action<ImageSource> Done)> Queue =
             new BlockingCollection<(string Key, Action<ImageSource> Done)>();
 
-        // 效能統計（寫進 fence.log）
+        // 效能統計（寫進 gridify.log）
         static int _loaded;
         static long _workMs;
         static readonly Stopwatch Wall = new Stopwatch();

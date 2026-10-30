@@ -79,7 +79,6 @@ namespace GridifyApp
             _cfg = ConfigStore.Load();
             Loc.Init(_cfg.Language);          // 必須在建立任何視窗之前
             ConfigStore.BackupBeforeUpgrade(_cfg, AppInfo.Version);
-            StartupHelper.MigrateLegacy();
             if (_cfg.Appearance == null) _cfg.Appearance = new AppearanceConfig();
             Theme.Apply(_cfg.Appearance);   // 必須在建立任何收納區視窗之前
             _appearanceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
@@ -126,7 +125,7 @@ namespace GridifyApp
                 _tray.ShowBalloonTip(6000, Loc.AppName, Loc.T("tray.safeMode"), System.Windows.Forms.ToolTipIcon.Info);
 
             startWatch.Stop();
-            PerfLog.Write("startup: " + startWatch.ElapsedMilliseconds + "ms, fences " + _cfg.Grids.Count +
+            PerfLog.Write("startup: " + startWatch.ElapsedMilliseconds + "ms, grids " + _cfg.Grids.Count +
                           ", items " + _cfg.Grids.Sum(f => f.AllItems.Count()) + ", mem " + MemMb() + "MB");
             // 圖示在背景載入完之後再記一次記憶體
             var memTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
@@ -163,6 +162,20 @@ namespace GridifyApp
             _appearanceWin.Closed += (s, a) => { _appearanceWin = null; SaveConfig(); };
             _appearanceWin.Show();
             _appearanceWin.Activate();
+        }
+
+        // ---------- 使用說明 ----------
+        HelpWindow _helpWin;
+
+        void ShowHelp()
+        {
+            if (_helpWin == null)
+            {
+                _helpWin = new HelpWindow();
+                _helpWin.Closed += (s, a) => _helpWin = null;
+                _helpWin.Show();
+            }
+            _helpWin.Activate();
         }
 
         // ---------- 版本紀錄 / 檢查更新 ----------
@@ -978,9 +991,26 @@ namespace GridifyApp
         void BuildTray()
         {
             var menu = new System.Windows.Forms.ContextMenuStrip();
+            var Sep = new Func<System.Windows.Forms.ToolStripSeparator>(() => new System.Windows.Forms.ToolStripSeparator());
+
+            // 1. 常用
             menu.Items.Add(Loc.T("tray.newGrid"), null, (s, a) => AddGrid());
             menu.Items.Add(Loc.T("tray.toggle"), null, (s, a) => ToggleAll());
+            menu.Items.Add(Sep());
 
+            // 2. 整理桌面
+            menu.Items.Add(Loc.T("tray.categorize"), null, (s, a) => AutoCategorize());
+            menu.Items.Add(Loc.T("tray.refresh"), null, (s, a) => SyncDesktop());
+            var undoItem = new System.Windows.Forms.ToolStripMenuItem(Loc.T("tray.undo")) { ShortcutKeyDisplayString = "Ctrl+Z" };
+            undoItem.Click += (s, a) => DoUndo();
+            var redoItem = new System.Windows.Forms.ToolStripMenuItem(Loc.T("tray.redo")) { ShortcutKeyDisplayString = "Ctrl+Y" };
+            redoItem.Click += (s, a) => DoRedo();
+            menu.Items.Add(undoItem);
+            menu.Items.Add(redoItem);
+            menu.Opening += (s, a) => { undoItem.Enabled = _undo.Count > 0; redoItem.Enabled = _redo.Count > 0; };
+            menu.Items.Add(Sep());
+
+            // 3. 設定
             var take = new System.Windows.Forms.ToolStripMenuItem(Loc.T("tray.takeover"))
             {
                 CheckOnClick = true,
@@ -993,18 +1023,7 @@ namespace GridifyApp
                 SaveConfig();
             };
             menu.Items.Add(take);
-
-            var undoItem = new System.Windows.Forms.ToolStripMenuItem(Loc.T("tray.undo"));
-            undoItem.Click += (s, a) => DoUndo();
-            var redoItem = new System.Windows.Forms.ToolStripMenuItem(Loc.T("tray.redo"));
-            redoItem.Click += (s, a) => DoRedo();
-            menu.Items.Add(undoItem);
-            menu.Items.Add(redoItem);
-            menu.Opening += (s, a) => { undoItem.Enabled = _undo.Count > 0; redoItem.Enabled = _redo.Count > 0; };
             menu.Items.Add(Loc.T("tray.appearance"), null, (s, a) => ShowAppearance());
-            menu.Items.Add(Loc.T("tray.categorize"), null, (s, a) => AutoCategorize());
-            menu.Items.Add(Loc.T("tray.refresh"), null, (s, a) => SyncDesktop());
-            menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
             var startup = new System.Windows.Forms.ToolStripMenuItem(Loc.T("tray.startup"))
             {
@@ -1044,13 +1063,16 @@ namespace GridifyApp
                 lang.DropDownItems.Add(item);
             }
             menu.Items.Add(lang);
+            menu.Items.Add(Sep());
 
+            // 4. 說明
+            menu.Items.Add(Loc.T("tray.help"), null, (s, a) => ShowHelp());
+            menu.Items.Add(Loc.T("tray.updates"), null, (s, a) => ShowUpdates());
             menu.Items.Add(Loc.T("tray.openData"), null, (s, a) =>
             {
                 Directory.CreateDirectory(AppPaths.DataDir);
                 Process.Start("explorer.exe", "\"" + AppPaths.DataDir + "\"");
             });
-            menu.Items.Add(Loc.T("tray.updates"), null, (s, a) => ShowUpdates());
             menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
             menu.Items.Add(Loc.T("tray.uninstall"), null, (s, a) => Uninstall());
             menu.Items.Add(Loc.T("tray.quit"), null, (s, a) => ExitApp());
@@ -1135,7 +1157,7 @@ namespace GridifyApp
             DesktopLayer.Restore();   // 先把桌面圖示還給系統
             ConfigStore.Disabled = true;
             try { StartupHelper.Set(false); } catch { }
-            try { if (Directory.Exists(AppPaths.DataDir)) Directory.Delete(AppPaths.DataDir, true); } catch { }
+            ConfigStore.RemoveAllData();   // 只刪 Gridify 自己的檔案，不遞迴刪整個資料夾
 
             string msg;
             if (IsDevLayout() || !CanDeleteProgramFolder())
@@ -1177,14 +1199,12 @@ namespace GridifyApp
                 {
                     string n = e.Name;
                     bool ours = n.StartsWith("Gridify", StringComparison.OrdinalIgnoreCase) ||
-                                n.Equals("data", StringComparison.OrdinalIgnoreCase) ||
+                                (n.Equals("data", StringComparison.OrdinalIgnoreCase) && new DirectoryInfo(e.FullName).GetFileSystemInfos().Length == 0) ||
                                 n.Equals("portable.flag", StringComparison.OrdinalIgnoreCase) ||
                                 n.StartsWith("README", StringComparison.OrdinalIgnoreCase) ||
                                 n.StartsWith("LICENSE", StringComparison.OrdinalIgnoreCase) ||
                                 n.StartsWith("PRIVACY", StringComparison.OrdinalIgnoreCase) ||
-                                n.StartsWith("Restore-Desktop", StringComparison.OrdinalIgnoreCase) ||
-                                n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                                n.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase);
+                                n.StartsWith("Restore-Desktop", StringComparison.OrdinalIgnoreCase);
                     if (!ours) return false;
                 }
                 return true;

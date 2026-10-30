@@ -146,7 +146,7 @@ namespace GridifyApp
 
     public class AppConfig
     {
-        [JsonPropertyName("Fences")]   // 保留舊設定檔的欄位名稱，既有資料才讀得到
+        [JsonPropertyName("Fences")]   // 設定檔裡的欄位名稱：為了讀得到 1.0.0 ~ 1.2.x 寫出的設定檔而保留，使用者看不到
         public List<GridData> Grids { get; set; } = new List<GridData>();
         public AppearanceConfig Appearance { get; set; } = new AppearanceConfig();
 
@@ -179,7 +179,20 @@ namespace GridifyApp
     {
         public static readonly string BaseDir = (Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory).TrimEnd('\\', '/');
         public static readonly bool Portable =
-            File.Exists(Path.Combine(BaseDir, "portable.flag")) || Directory.Exists(Path.Combine(BaseDir, "data"));
+            File.Exists(Path.Combine(BaseDir, "portable.flag")) || LooksLikeOurData(Path.Combine(BaseDir, "data"));
+
+        /// <summary>只有「空的 data 資料夾」或「裡面是 Gridify 自己的檔案」才當成可攜版的資料夾；別人放在程式旁的 data 資料夾不能動。</summary>
+        static bool LooksLikeOurData(string dir)
+        {
+            try
+            {
+                if (!Directory.Exists(dir)) return false;
+                if (Directory.GetFileSystemEntries(dir).Length == 0) return true;
+                return File.Exists(Path.Combine(dir, "config.json")) || File.Exists(Path.Combine(dir, "gridify.log")) ||
+                       File.Exists(Path.Combine(dir, "crash.log")) || Directory.Exists(Path.Combine(dir, "backups"));
+            }
+            catch { return false; }
+        }
         public static readonly string DataDir = Portable
             ? Path.Combine(BaseDir, "data")
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Gridify");
@@ -298,6 +311,35 @@ namespace GridifyApp
             catch { }
         }
 
+        /// <summary>解除安裝（可攜版）用：只刪 Gridify 自己的設定、備份與記錄檔；資料夾裡如果還有別人的檔案就整個保留。</summary>
+        public static void RemoveAllData()
+        {
+            try
+            {
+                string dir = AppPaths.DataDir;
+                if (!Directory.Exists(dir)) return;
+                foreach (var f in Directory.GetFiles(dir))
+                {
+                    string n = Path.GetFileName(f).ToLowerInvariant();
+                    if (n.StartsWith("config") || n.EndsWith(".log"))
+                        try { File.Delete(f); } catch { }
+                }
+                string b = Path.Combine(dir, "backups");
+                if (Directory.Exists(b))
+                {
+                    foreach (var f in Directory.GetFiles(b))
+                    {
+                        string n = Path.GetFileName(f).ToLowerInvariant();
+                        if ((n.StartsWith("config-") || n.StartsWith("before-upgrade-")) && n.EndsWith(".json"))
+                            try { File.Delete(f); } catch { }
+                    }
+                    try { Directory.Delete(b); } catch { }   // 不遞迴：裡面還有別的檔案就保留
+                }
+                try { Directory.Delete(dir); } catch { }
+            }
+            catch { }
+        }
+
         public static void Save(AppConfig cfg)
         {
             if (Disabled || cfg == null) return;
@@ -381,7 +423,6 @@ namespace GridifyApp
     {
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         const string ValueName = "Gridify";
-        const string LegacyName = "PignitionFence";   // 改名前的舊值
 
         public static bool IsEnabled()
         {
@@ -394,22 +435,9 @@ namespace GridifyApp
             using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
             {
                 if (k == null) return;
-                k.DeleteValue(LegacyName, false);
                 if (enable) k.SetValue(ValueName, "\"" + Environment.ProcessPath + "\"");
                 else k.DeleteValue(ValueName, false);
             }
-        }
-
-        /// <summary>改名前如果有開機自動啟動，改寫成新的值（指向目前的程式），舊值移除。</summary>
-        public static void MigrateLegacy()
-        {
-            try
-            {
-                using (var k = Registry.CurrentUser.OpenSubKey(RunKey))
-                    if (k?.GetValue(LegacyName) == null) return;
-                Set(true);
-            }
-            catch { }
         }
     }
 }

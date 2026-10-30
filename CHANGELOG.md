@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.1 - 2026-10-30
+### Added
+- **How to use** guide: tray menu > "How to use...", also linked from the first-run welcome window. Built into the app, works offline, follows the UI language.
+
+### Fixed
+- Clicking an empty area of a grid, or anywhere outside it (desktop, taskbar, another program or another grid), now clears the selection, like in Explorer. Menus and dialogs opened from Gridify keep it.
+
+### Safety
+- Portable uninstall now deletes only Gridify's own settings, backups and logs (no recursive delete of the `data` folder), and a `data` folder next to the exe is only used as Gridify's data folder if it is empty or already contains Gridify files. The "also delete the program folder" option now refuses to run if the folder contains anything that is not Gridify's.
+
+### Changed
+- The log file is now `gridify.log`; leftover code for migrating from a pre-release private build was removed.
+- Gridify no longer replaces Windows behavior for your files: **F2 renames in place** under the icon like Explorer (only the name part is selected, a warning appears if you change the extension), and **Delete / Shift+Delete** use Windows' own delete (Recycle Bin and confirmation follow your Windows settings). The icon right-click menu's own entries are now just "Move out of this grid", "Open file location" and "More Gridify options...".
+- The tray menu is regrouped: common actions, organizing (organize by type, refresh, undo/redo with their shortcuts), settings (take over desktop, appearance, start with Windows, Ctrl+right-click, language), help (how to use, version history, data folder), then uninstall and quit.
+
 ## 1.2.0 - 2026-10-30
 ### Added
 - **Version history / Check for updates**: tray menu > "Version history / Check for updates...". The version history is built into the app (works offline); pressing "Check for updates" contacts GitHub once to ask for the latest version and offers a link to the download page. An optional "check once a day" setting (off by default) can notify you from the tray. Gridify never downloads or installs anything by itself.
@@ -32,7 +47,7 @@
 - A collapsed grid could expand to the wrong height. The expanded height is now only changed when you resize the grid.
 
 ## 1.0.0 - 2026-10-29
-First public release (renamed from the private "Fence" tool).
+First public release.
 
 - Reference-mode desktop grids: drag files in, nothing is moved or copied.
 - Optional desktop takeover with guaranteed restore (exit, crash guard, uninstall, `--restore`).

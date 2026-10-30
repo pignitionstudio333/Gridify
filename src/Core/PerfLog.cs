@@ -3,12 +3,12 @@ using System.IO;
 
 namespace GridifyApp
 {
-    /// <summary>效能與除錯紀錄：寫在 data\fence.log（超過 256KB 就重新開始）。</summary>
+    /// <summary>效能與除錯紀錄：寫在 data\gridify.log（超過 256KB 就重新開始）。</summary>
     public static class PerfLog
     {
         static readonly object Gate = new object();
 
-        public static void Write(string message) => WriteTo("fence.log", message);
+        public static void Write(string message) => WriteTo("gridify.log", message);
 
         /// <summary>例外紀錄寫在 data\crash.log，方便回報問題；程式會繼續執行，不會因為單一錯誤結束。</summary>
         public static void Crash(string where, Exception ex)

@@ -95,6 +95,7 @@ namespace GridifyApp
             { "rename.prompt", "New name:" },
             { "rename.invalid", "The name contains characters that are not allowed." },
             { "rename.exists", "An item with that name already exists." },
+            { "rename.extWarn", "If you change a file name extension, the file might become unusable.\n\nAre you sure you want to change it?" },
             { "rename.fail", "Cannot rename:\n{0}" },
             { "delete.confirm", "Move these {0} item(s) to the Recycle Bin?\n\n{1}" },
             { "delete.fail", "Cannot delete \"{0}\":\n{1}" },
@@ -186,6 +187,18 @@ namespace GridifyApp
             { "upd.note", "Gridify only connects to GitHub when you press \"Check for updates\" or turn on the daily check, and sends nothing about you. Updating = download the new installer and run it; your settings are kept." },
             { "upd.history", "Version history" },
             { "upd.balloon", "Gridify {0} is available. Click for details." },
+            { "tray.help", "How to use…" },
+            { "w.help", "How to use Gridify…" },
+            { "help.title", "How to use Gridify" },
+            { "help.sub", "A quick guide. You can open it again from the tray menu." },
+            { "help.1.h", "The basic idea" },
+            { "help.1.b", "A grid only remembers where your files are - nothing is moved, copied or deleted.\nWith \"Take over desktop\" on, your desktop items show up inside grids instead of Windows' own icons." },
+            { "help.2.h", "How to use" },
+            { "help.2.b", "Add files: drag them from the desktop or Explorer into a grid.\nMove an item to another grid: drag it onto that grid. Reorder: drag it inside its grid.\nOpen an item: double-click it (or press Enter).\nRename a file: select it and press F2 (just like in Explorer).\nDelete a file: select it and press Delete, as in Explorer (Shift+Delete deletes permanently).\nMore actions on an item: right-click it for the normal Windows menu (Shift + right-click for more). Gridify's own entries are at the bottom.\nMove a grid: drag its title bar. Resize it: drag an edge or corner.\nCollapse or expand a grid: double-click its title bar.\nRename, add or delete a grid: right-click the title bar or an empty area.\nAdd a tab: click +. Rename a tab: double-click it. Move or delete a tab: right-click it.\nReorder tabs: drag a tab. Move a tab to another grid: drag it onto that grid.\nPut items into a tab: drop them onto the tab.\nMerge a single-tab grid into another grid: hold Ctrl and drag its title onto that grid.\nUndo / redo: Ctrl+Z / Ctrl+Y.\nChange the icon size: Ctrl + mouse wheel." },
+            { "help.3.h", "Saving and your data" },
+            { "help.3.b", "Everything is saved automatically - there is no Save button.\nSettings live in the data folder (tray menu > Open data folder): %LOCALAPPDATA%\\Gridify for the installed version, the data folder next to Gridify.exe for the portable version.\nBackups are automatic: the last good copy, a daily snapshot (last 7 days) and a copy before each upgrade.\nOnly file paths are stored. Your files are never touched, and nothing is sent anywhere unless you press \"Check for updates\"." },
+            { "help.4.h", "If something goes wrong" },
+            { "help.4.b", "Untick \"Take over desktop\" in the tray menu, or quit Gridify - the desktop icons come back. Otherwise run Gridify.exe --restore." },
         };
 
         static readonly Dictionary<string, string> Zh = new Dictionary<string, string>
@@ -234,6 +247,7 @@ namespace GridifyApp
             { "rename.prompt", "新名稱：" },
             { "rename.invalid", "名稱含有不能使用的字元。" },
             { "rename.exists", "已經有同名的項目。" },
+            { "rename.extWarn", "如果變更副檔名，檔案可能會無法使用。\n\n確定要變更嗎？" },
             { "rename.fail", "無法重新命名：\n{0}" },
             { "delete.confirm", "要把以下 {0} 個項目移到資源回收筒嗎？\n\n{1}" },
             { "delete.fail", "無法刪除「{0}」：\n{1}" },
@@ -325,6 +339,18 @@ namespace GridifyApp
             { "upd.note", "只有在你按下「檢查更新」或開啟每日檢查時，Gridify 才會連到 GitHub，而且不會傳送任何關於你的資料。更新方式：下載新的安裝檔執行即可，你的設定會保留。" },
             { "upd.history", "版本紀錄" },
             { "upd.balloon", "Gridify {0} 已推出，點一下查看。" },
+            { "tray.help", "使用說明…" },
+            { "w.help", "查看 Gridify 使用說明…" },
+            { "help.title", "Gridify 使用說明" },
+            { "help.sub", "快速上手指南，之後也可以從系統匣選單再打開。" },
+            { "help.1.h", "基本觀念" },
+            { "help.1.b", "收納區只記錄檔案的位置，不會搬移、複製或刪除任何東西。\n開啟「接管桌面」後，桌面項目會顯示在收納區裡，取代 Windows 原本的桌面圖示。" },
+            { "help.2.h", "操作方式" },
+            { "help.2.b", "加入檔案：從桌面或檔案總管把檔案拖進收納區。\n把項目移到另一個收納區：拖到那個收納區上。調整順序：在原本的收納區裡拖曳。\n開啟項目：雙擊（或按 Enter）。\n重新命名檔案：選取後按 F2（和檔案總管一樣）。\n刪除檔案：選取後按 Delete，和檔案總管一樣（Shift+Delete 是永久刪除）。\n項目的其他功能：在項目上按右鍵，會顯示 Windows 原本的選單（按住 Shift 再按右鍵有更多選項），Gridify 自己的項目在最下面。\n移動收納區：拖曳標題列。調整大小：拖曳邊緣或角落。\n收合或展開收納區：雙擊標題列。\n重新命名、新增或刪除收納區：在標題列或空白處按右鍵。\n新增分頁：點 +。重新命名分頁：雙擊分頁。移動或刪除分頁：在分頁上按右鍵。\n調整分頁順序：拖曳分頁。把分頁移到另一個收納區：拖到那個收納區上。\n把項目放進分頁：拖到分頁上放開。\n把只有一個分頁的收納區併進另一個收納區：按住 Ctrl，拖曳它的標題到那個收納區上。\n復原／重做：Ctrl+Z / Ctrl+Y。\n調整圖示大小：Ctrl + 滑鼠滾輪。" },
+            { "help.3.h", "存檔與資料" },
+            { "help.3.b", "所有變動都會自動存檔，沒有「儲存」按鈕。\n設定放在資料夾裡（系統匣選單 > 開啟設定資料夾）：安裝版是 %LOCALAPPDATA%\\Gridify，可攜版是 Gridify.exe 旁的 data 資料夾。\n備份是自動的：上一份完好的設定、每天一份快照（保留最近 7 天），以及每次升級前的一份。\n只儲存檔案路徑，不會動你的檔案；除非你按下「檢查更新」，否則不會傳送任何資料。" },
+            { "help.4.h", "出問題時" },
+            { "help.4.b", "在系統匣選單取消勾選「接管桌面」，或結束 Gridify，桌面圖示就會回來。還是不行就執行 Gridify.exe --restore。" },
         };
     }
 

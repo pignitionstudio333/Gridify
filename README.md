@@ -40,12 +40,12 @@ The full source code is in this repository and the releases are built by GitHub 
 
 ## Usage
 - Drag files/folders from the desktop or Explorer into a grid.
-- Double-click an item to open it. Right-click an item for the normal Windows menu (Shift+right-click for more) plus Gridify entries: move out of the grid, open file location, rename. "Delete" sends the file to the Recycle Bin.
+- Double-click an item to open it. Right-click an item for the normal Windows menu (Shift+right-click for more) plus Gridify entries (move out of the grid, open file location). F2 renames and Delete deletes, exactly like in Explorer.
 - Drag empty space in the title bar to move a grid, the bottom-right corner to resize it.
 - Click **+** in the title bar to add a tab. Double-click a tab to rename it, right-click for more, drag it to reorder or into another grid. Dropping items on a tab puts them there.
 - **Ctrl + drag a grid's title** (when it has a single tab) moves the whole grid into another grid as a new tab.
 - **Ctrl+Z** / **Ctrl+Y** undo and redo changes to grids, tabs and which items belong where (works while a grid window is focused).
-- Tray icon: show/hide all, take over desktop, appearance, organize by type, language, start with Windows, version history / check for updates, uninstall, quit.
+- Tray icon: show/hide all, take over desktop, appearance, organize by type, language, start with Windows, how to use, version history / check for updates, uninstall, quit.
 - Hold **Shift** while starting for **safe mode** (the desktop is not taken over).
 - Language changes apply after restarting Gridify.
 

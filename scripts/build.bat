@@ -7,18 +7,15 @@ set "DOTNET_NOLOGO=1"
 cd /d "%~dp0.."
 set "ROOT=%CD%"
 
-echo [1/3] Stopping running Gridify (and the old Fence.exe, if any)...
+echo [1/3] Stopping running Gridify...
 taskkill /f /im Gridify.exe >nul 2>&1
-taskkill /f /im Fence.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 rem Restore the desktop icon layer in case the app was force-killed while hiding it
 if exist "%ROOT%\publish\Gridify.exe" start /wait "" "%ROOT%\publish\Gridify.exe" --restore
-if exist "%ROOT%\publish\Fence.exe" start /wait "" "%ROOT%\publish\Fence.exe" --restore
 
 echo [2/3] Removing old program files (data folder is kept)...
 if exist "%ROOT%\publish" (
   for %%F in ("%ROOT%\publish\Gridify.*") do del /f /q "%%~F" >nul 2>&1
-  for %%F in ("%ROOT%\publish\Fence.*") do del /f /q "%%~F" >nul 2>&1
 )
 
 echo [3/3] Building and publishing...
