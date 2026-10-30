@@ -10,6 +10,10 @@ namespace GridifyApp
         /// <summary>使用者是否選擇接管桌面（直接關掉視窗視為「先不要」，最安全）。</summary>
         public bool TakeOver { get; private set; }
 
+        /// <summary>「登入 Windows 時自動啟動」的選擇；AutoStartChosen 為 false（直接關掉視窗）代表不更動目前的設定。</summary>
+        public bool AutoStart { get; private set; }
+        public bool AutoStartChosen { get; private set; }
+
         public WelcomeWindow()
         {
             Title = Loc.T("w.title");
@@ -50,11 +54,19 @@ namespace GridifyApp
                     TextWrapping = TextWrapping.Wrap
                 });
 
+            var auto = new CheckBox
+            {
+                Content = Loc.T("w.autostart"),
+                IsChecked = StartupHelper.IsEnabled(),
+                Margin = new Thickness(0, 18, 0, 0)
+            };
+            root.Children.Add(auto);
+
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 22, 0, 0) };
             var later = new Button { Content = Loc.T("w.later"), Height = 34, Padding = new Thickness(18, 0, 18, 0), Margin = new Thickness(0, 0, 10, 0), IsCancel = true };
             var enable = new Button { Content = Loc.T("w.enable"), Height = 34, Padding = new Thickness(18, 0, 18, 0), FontWeight = FontWeights.SemiBold, IsDefault = true };
-            later.Click += (s, e) => { TakeOver = false; DialogResult = false; };
-            enable.Click += (s, e) => { TakeOver = true; DialogResult = true; };
+            later.Click += (s, e) => { TakeOver = false; AutoStart = auto.IsChecked == true; AutoStartChosen = true; DialogResult = false; };
+            enable.Click += (s, e) => { TakeOver = true; AutoStart = auto.IsChecked == true; AutoStartChosen = true; DialogResult = true; };
             buttons.Children.Add(later);
             buttons.Children.Add(enable);
             root.Children.Add(buttons);

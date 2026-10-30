@@ -162,6 +162,7 @@
 
             <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent" AllowDrop="True"
                   PreviewMouseLeftButtonDown="TitleBar_PreviewMouseLeftButtonDown"
+                  PreviewMouseMove="TitleBar_PreviewMouseMove" PreviewMouseLeftButtonUp="TitleBar_PreviewMouseLeftButtonUp"
                   MouseEnter="TitleBar_MouseEnter" MouseLeave="TitleBar_MouseLeave">
                 <TextBlock x:Name="TitleText" Margin="10,0,64,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource Grid.TitleText}" FontWeight="SemiBold" FontSize="12"/>

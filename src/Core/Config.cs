@@ -160,6 +160,14 @@ namespace GridifyApp
         public string Language { get; set; } = "auto";
         /// <summary>接管桌面：隱藏 Windows 原本的桌面 icon 層，所有桌面項目改由收納區顯示。</summary>
         public bool TakeOver { get; set; } = true;
+
+        /// <summary>每天自動檢查一次更新（會連到 GitHub，預設關閉）。</summary>
+        public bool AutoCheckUpdate { get; set; } = false;
+        public long LastUpdateCheckUtc { get; set; }
+        /// <summary>已經用系統匣通知過的版本，同一個版本只通知一次。</summary>
+        public string LastNotifiedVersion { get; set; } = "";
+        /// <summary>上次執行的程式版本，用來在升級時先備份設定檔。</summary>
+        public string LastRunVersion { get; set; } = "";
     }
 
     /// <summary>
@@ -259,6 +267,22 @@ namespace GridifyApp
             }
             catch { }
             return null;
+        }
+
+        /// <summary>版本改變（升級）後第一次啟動：先把升級前的設定檔另存一份，萬一新版轉換出錯可以手動還原。</summary>
+        public static void BackupBeforeUpgrade(AppConfig cfg, string current)
+        {
+            if (cfg == null || cfg.LastRunVersion == current) return;
+            try
+            {
+                if (cfg.FirstRunDone && File.Exists(AppPaths.ConfigFile))
+                {
+                    Directory.CreateDirectory(BackupDir);
+                    File.Copy(AppPaths.ConfigFile, Path.Combine(BackupDir, "before-upgrade-" + current + ".json"), true);
+                }
+            }
+            catch { }
+            cfg.LastRunVersion = current;
         }
 
         static void DailySnapshot()

@@ -2,7 +2,7 @@
 
 **English**
 
-Gridify does not collect, transmit or share any data. It makes no network connections, has no telemetry, no analytics, no accounts and no auto-update check.
+Gridify does not collect, transmit or share any data. It has no telemetry, no analytics and no accounts, and makes no network connections by default. The only connection is one HTTPS request to GitHub (`api.github.com`, asking for the latest release number) that happens only when you press "Check for updates" or turn on the optional daily check (off by default). GitHub sees your IP address and the user agent `Gridify/<version>`; nothing else is sent. Gridify never downloads or installs updates by itself.
 
 What it stores, and where:
 
@@ -18,7 +18,7 @@ Log files contain file paths and error messages and never leave your computer. D
 
 **繁體中文**
 
-Gridify 不會蒐集、傳送或分享任何資料：沒有網路連線、沒有遙測或分析、沒有帳號，也沒有自動檢查更新。
+Gridify 不會蒐集、傳送或分享任何資料：沒有遙測或分析、沒有帳號，預設也不連網。唯一的連線是對 GitHub（`api.github.com`）發出一個查詢最新版本號的 HTTPS 請求，只有在你按下「檢查更新」，或開啟「每天自動檢查」（預設關閉）時才會發生；GitHub 看得到你的 IP 位址與 `Gridify/<版本>` 這個識別字串，不會傳送其他任何資料。Gridify 不會自己下載或安裝更新。
 
 儲存內容：
 - 收納區配置、外觀、語言（`config.json`）、備份與記錄檔：可攜版放在 `Gridify.exe` 旁的 `data` 資料夾；安裝版放在 `%LOCALAPPDATA%\Gridify`。

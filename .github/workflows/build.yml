@@ -23,6 +23,14 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - name: Check the tag matches the project version
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $proj = ([xml](Get-Content src/Gridify.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ($tag -ne $proj) { Write-Error "Tag $tag does not match <Version> $proj in src/Gridify.csproj"; exit 1 }
+
       - name: Resolve version
         id: ver
         shell: pwsh

@@ -1,6 +1,6 @@
-; Gridify installer (Inno Setup 6). Build: ISCC.exe /DAppVersion=1.1.1 installer\Gridify.iss
+; Gridify installer (Inno Setup 6). Build: ISCC.exe /DAppVersion=1.2.0 installer\Gridify.iss
 #ifndef AppVersion
-  #define AppVersion "1.1.1"
+  #define AppVersion "1.2.0"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\dist\build"
@@ -61,6 +61,22 @@ Filename: "{app}\Gridify.exe"; Parameters: "--restore"; Flags: runhidden waitunt
 Filename: "{sys}\taskkill.exe"; Parameters: "/f /im Gridify.exe"; Flags: runhidden waituntilterminated; RunOnceId: "GridifyKill"
 
 [Code]
+{ Upgrading while Gridify is running: give the desktop icons back first, then stop it so the files can be replaced. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  Exe: String;
+begin
+  Result := '';
+  Exe := ExpandConstant('{app}\Gridify.exe');
+  if FileExists(Exe) then
+  begin
+    Exec(Exe, '--restore', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/f /im Gridify.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(500);
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataDir: string;

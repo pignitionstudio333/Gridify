@@ -15,7 +15,8 @@ A lightweight desktop organizer for Windows 10/11. Group your desktop icons into
 - **Appearance** – icon size, opacity, color, acrylic blur, shadow, animations (all can be switched off for performance).
 - **Auto-organize** – one click sorts the desktop into Apps, Folders, Documents and Media tabs (or grids).
 - **English / 繁體中文** UI.
-- **No telemetry, no network, no admin rights.**
+- **Version history & update check** – tray menu > "Version history / Check for updates...". Nothing is downloaded automatically.
+- **No telemetry, no admin rights, no network by default** – the only connection is an update check that you trigger yourself (or turn on).
 
 ## Download
 Get the latest build from the **Releases** page:
@@ -39,16 +40,22 @@ The full source code is in this repository and the releases are built by GitHub 
 
 ## Usage
 - Drag files/folders from the desktop or Explorer into a grid.
-- Double-click an item to open it. Right-click for open location, rename, remove from grid, delete (Recycle Bin).
+- Double-click an item to open it. Right-click an item for the normal Windows menu (Shift+right-click for more) plus Gridify entries: move out of the grid, open file location, rename. "Delete" sends the file to the Recycle Bin.
 - Drag empty space in the title bar to move a grid, the bottom-right corner to resize it.
 - Click **+** in the title bar to add a tab. Double-click a tab to rename it, right-click for more, drag it to reorder or into another grid. Dropping items on a tab puts them there.
+- **Ctrl + drag a grid's title** (when it has a single tab) moves the whole grid into another grid as a new tab.
 - **Ctrl+Z** / **Ctrl+Y** undo and redo changes to grids, tabs and which items belong where (works while a grid window is focused).
-- Tray icon: show/hide all, take over desktop, appearance, organize by type, language, start with Windows, uninstall, quit.
+- Tray icon: show/hide all, take over desktop, appearance, organize by type, language, start with Windows, version history / check for updates, uninstall, quit.
 - Hold **Shift** while starting for **safe mode** (the desktop is not taken over).
 - Language changes apply after restarting Gridify.
 
 ## If desktop icons stay hidden
 Quit Gridify from the tray, or run `Gridify.exe --restore` (the portable zip includes `Restore-Desktop.bat`). Restarting Explorer or rebooting also brings them back.
+
+## Updating
+- Tray → **Version history / Check for updates...** tells you whether a newer version exists (only when you ask, or if you turn on the daily check).
+- Installed version: download the new `...-setup.exe` and run it. It updates in place and keeps your settings (a backup of your settings is also made on the first start of the new version).
+- Portable version: unzip the new version and copy your old `data` folder into it.
 
 ## Uninstall
 - Installed version: Windows Settings → Apps, or tray → Uninstall. Gridify restores your icons first and asks whether to delete its settings.

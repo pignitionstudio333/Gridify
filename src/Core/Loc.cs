@@ -172,6 +172,20 @@ namespace GridifyApp
             { "w.undo4", "If anything goes wrong, run  Gridify.exe --restore" },
             { "w.enable", "Take over my desktop (recommended)" },
             { "w.later", "Not now" },
+            { "w.autostart", "Start Gridify when I sign in to Windows" },
+            { "tray.updates", "Version history / Check for updates…" },
+            { "upd.title", "Version history" },
+            { "upd.current", "Current version: {0}" },
+            { "upd.check", "Check for updates" },
+            { "upd.checking", "Checking…" },
+            { "upd.latest", "You are using the latest version." },
+            { "upd.newer", "A new version is available: {0}" },
+            { "upd.download", "Go to download page" },
+            { "upd.error", "Could not check for updates ({0})." },
+            { "upd.auto", "Check for updates once a day (connects to GitHub)" },
+            { "upd.note", "Gridify only connects to GitHub when you press \"Check for updates\" or turn on the daily check, and sends nothing about you. Updating = download the new installer and run it; your settings are kept." },
+            { "upd.history", "Version history" },
+            { "upd.balloon", "Gridify {0} is available. Click for details." },
         };
 
         static readonly Dictionary<string, string> Zh = new Dictionary<string, string>
@@ -297,6 +311,20 @@ namespace GridifyApp
             { "w.undo4", "萬一出問題，執行  Gridify.exe --restore" },
             { "w.enable", "接管我的桌面（建議）" },
             { "w.later", "先不要" },
+            { "w.autostart", "登入 Windows 時自動啟動 Gridify" },
+            { "tray.updates", "版本紀錄／檢查更新…" },
+            { "upd.title", "版本紀錄" },
+            { "upd.current", "目前版本：{0}" },
+            { "upd.check", "檢查更新" },
+            { "upd.checking", "檢查中…" },
+            { "upd.latest", "你使用的已是最新版本。" },
+            { "upd.newer", "有新版本：{0}" },
+            { "upd.download", "前往下載頁面" },
+            { "upd.error", "無法檢查更新（{0}）。" },
+            { "upd.auto", "每天自動檢查一次更新（會連線到 GitHub）" },
+            { "upd.note", "只有在你按下「檢查更新」或開啟每日檢查時，Gridify 才會連到 GitHub，而且不會傳送任何關於你的資料。更新方式：下載新的安裝檔執行即可，你的設定會保留。" },
+            { "upd.history", "版本紀錄" },
+            { "upd.balloon", "Gridify {0} 已推出，點一下查看。" },
         };
     }
 

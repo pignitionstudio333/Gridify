@@ -78,6 +78,7 @@ namespace GridifyApp
 
             _cfg = ConfigStore.Load();
             Loc.Init(_cfg.Language);          // 必須在建立任何視窗之前
+            ConfigStore.BackupBeforeUpgrade(_cfg, AppInfo.Version);
             StartupHelper.MigrateLegacy();
             if (_cfg.Appearance == null) _cfg.Appearance = new AppearanceConfig();
             Theme.Apply(_cfg.Appearance);   // 必須在建立任何收納區視窗之前
@@ -91,6 +92,8 @@ namespace GridifyApp
                 var welcome = new WelcomeWindow();
                 welcome.ShowDialog();
                 _cfg.TakeOver = welcome.TakeOver;
+                if (welcome.AutoStartChosen)
+                    try { StartupHelper.Set(welcome.AutoStart); } catch { }
                 _cfg.FirstRunDone = true;
                 SaveConfig();
             }
@@ -111,6 +114,13 @@ namespace GridifyApp
             if (_cfg.DesktopHook) InstallDesktopHook();
             if (_takeOverActive) EnableTakeOver();
             SaveConfig();
+
+            if (_cfg.AutoCheckUpdate)
+            {
+                var updTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };   // 啟動 30 秒後才檢查，不拖慢開機
+                updTimer.Tick += (s, a) => { updTimer.Stop(); AutoCheckUpdate(); };
+                updTimer.Start();
+            }
 
             if (safeMode && _cfg.TakeOver)
                 _tray.ShowBalloonTip(6000, Loc.AppName, Loc.T("tray.safeMode"), System.Windows.Forms.ToolTipIcon.Info);
@@ -153,6 +163,44 @@ namespace GridifyApp
             _appearanceWin.Closed += (s, a) => { _appearanceWin = null; SaveConfig(); };
             _appearanceWin.Show();
             _appearanceWin.Activate();
+        }
+
+        // ---------- 版本紀錄 / 檢查更新 ----------
+        UpdateWindow _updateWin;
+        UpdateResult _pendingUpdate;
+
+        void ShowUpdates(UpdateResult result = null)
+        {
+            if (_updateWin == null)
+            {
+                _updateWin = new UpdateWindow(_cfg.AutoCheckUpdate, on => { _cfg.AutoCheckUpdate = on; SaveConfig(); });
+                _updateWin.Closed += (s, a) => _updateWin = null;
+                _updateWin.Show();
+            }
+            _updateWin.Activate();
+            if (result != null) _updateWin.ShowResult(result);
+        }
+
+        /// <summary>每天最多檢查一次；有新版本就用系統匣通知一次（同一個版本不重複通知）。失敗就安靜略過。</summary>
+        async void AutoCheckUpdate()
+        {
+            try
+            {
+                if (!_cfg.AutoCheckUpdate) return;
+                var last = new DateTime(Math.Max(0, _cfg.LastUpdateCheckUtc), DateTimeKind.Utc);
+                if ((DateTime.UtcNow - last).TotalHours < 24) return;
+                var r = await UpdateChecker.CheckAsync();
+                if (!r.Ok) return;
+                _cfg.LastUpdateCheckUtc = DateTime.UtcNow.Ticks;
+                if (r.Newer && _cfg.LastNotifiedVersion != r.Latest)
+                {
+                    _cfg.LastNotifiedVersion = r.Latest;
+                    _pendingUpdate = r;
+                    _tray?.ShowBalloonTip(8000, Loc.AppName, Loc.F("upd.balloon", r.Latest), System.Windows.Forms.ToolTipIcon.Info);
+                }
+                SaveConfig();
+            }
+            catch { }
         }
 
         protected override void OnExit(ExitEventArgs e)
@@ -517,6 +565,7 @@ namespace GridifyApp
                 var sd = src.Data; var dd = dst.Data;
                 var _a = sd.ActiveTabData; var _b = dd.ActiveTabData;
                 if (srcIndex < 0 || srcIndex >= sd.Tabs.Count) return;
+                if (!ReferenceEquals(sd, dd) && sd.Tabs.Count == 1) sd.InheritTitleForFirstTab();   // 單一分頁整個拖走：分頁沿用收納區的名稱
                 var tab = sd.Tabs[srcIndex];
 
                 if (ReferenceEquals(sd, dd))
@@ -1001,6 +1050,7 @@ namespace GridifyApp
                 Directory.CreateDirectory(AppPaths.DataDir);
                 Process.Start("explorer.exe", "\"" + AppPaths.DataDir + "\"");
             });
+            menu.Items.Add(Loc.T("tray.updates"), null, (s, a) => ShowUpdates());
             menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
             menu.Items.Add(Loc.T("tray.uninstall"), null, (s, a) => Uninstall());
             menu.Items.Add(Loc.T("tray.quit"), null, (s, a) => ExitApp());
@@ -1013,6 +1063,12 @@ namespace GridifyApp
                 Visible = true
             };
             _tray.DoubleClick += (s, a) => ToggleAll();
+            _tray.BalloonTipClicked += (s, a) =>
+            {
+                if (_pendingUpdate == null) return;
+                var r = _pendingUpdate; _pendingUpdate = null;
+                ShowUpdates(r);
+            };
         }
 
         /// <summary>程式內自己畫的系統匣圖示（藍色圓角方塊加四格），不需要額外的圖檔。</summary>

@@ -16,5 +16,5 @@ I will acknowledge reports as soon as I can and credit you in the changelog if y
 - Builds are currently **not code-signed**, so Windows SmartScreen may warn on first run (see README).
 
 ## What Gridify touches
-Gridify never moves or deletes your files, makes no network connections, needs no administrator rights,
+Gridify never moves or deletes your files, makes no network connections except an update check you trigger yourself (one request to GitHub), needs no administrator rights,
 and writes to the registry only if you enable "Start with Windows".

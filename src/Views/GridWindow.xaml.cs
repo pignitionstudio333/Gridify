@@ -217,7 +217,35 @@ namespace GridifyApp
                 IsInside(src, TabAddSingle) || IsInside(src, Chevron)) return;
             e.Handled = true;
             if (e.ClickCount == 2) { ToggleCollapse(); return; }
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && _data.Tabs.Count == 1)
+            {
+                // 只有一個分頁時：Ctrl+拖曳 = 把整個收納區當成一個分頁，拖到別的收納區去合併
+                _singleDrag = e.GetPosition(TitleBar);
+                TitleBar.CaptureMouse();
+                return;
+            }
             try { DragMove(); } catch { }
+        }
+
+        Point? _singleDrag;
+
+        void TitleBar_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (_singleDrag == null) return;
+            if (e.LeftButton != MouseButtonState.Pressed) { _singleDrag = null; TitleBar.ReleaseMouseCapture(); return; }
+            var p = e.GetPosition(TitleBar);
+            if (Math.Abs(p.X - _singleDrag.Value.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(p.Y - _singleDrag.Value.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+            _singleDrag = null;
+            TitleBar.ReleaseMouseCapture();
+            StartTabDrag(TitleBar, 0);
+        }
+
+        void TitleBar_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_singleDrag == null) return;
+            _singleDrag = null;
+            TitleBar.ReleaseMouseCapture();
         }
 
         public void BeginRename()
@@ -1021,7 +1049,7 @@ namespace GridifyApp
             e.Handled = true;
         }
 
-        void StartTabDrag(Border b, int idx)
+        void StartTabDrag(DependencyObject b, int idx)
         {
             var data = new DataObject();
             data.SetData(TabFormat, idx.ToString());
