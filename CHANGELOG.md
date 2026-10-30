@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2 - 2026-10-30
+### Fixed
+- The **Recycle Bin icon** in a grid now switches between empty and full as soon as the Recycle Bin changes (a file is deleted, the bin is emptied, an item is restored), instead of staying as it was when Gridify started.
+
+### Changed
+- Internal: the source code was split into smaller files. No change in behavior.
+
 ## 1.2.1 - 2026-10-30
 ### Added
 - **How to use** guide: tray menu > "How to use...", also linked from the first-run welcome window. Built into the app, works offline, follows the UI language.

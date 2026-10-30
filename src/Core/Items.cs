@@ -19,6 +19,9 @@ namespace GridifyApp
 
         ImageSource _icon;
 
+        // 系統圖示（本機、資源回收筒…）才需要在圖示改變時重新載入；用弱參照，收納區關掉後不會被卡住
+        static readonly List<WeakReference<GridItem>> LiveSpecial = new List<WeakReference<GridItem>>();
+
         public string FullPath { get; }
         public string Name { get; }
         public double ItemOpacity { get; }
@@ -45,6 +48,11 @@ namespace GridifyApp
             {
                 Name = IconHelper.SpecialName(path);
                 ItemOpacity = 1.0;
+                lock (LiveSpecial)
+                {
+                    LiveSpecial.RemoveAll(w => !w.TryGetTarget(out _));
+                    LiveSpecial.Add(new WeakReference<GridItem>(this));
+                }
             }
             else
             {
@@ -59,6 +67,24 @@ namespace GridifyApp
             _icon = IconHelper.TryGetCached(path);
             if (_icon == null)
                 IconHelper.LoadAsync(path, img => { if (img != null) Icon = img; });
+        }
+
+        /// <summary>讓所有顯示這個系統圖示的項目重新載入圖示（要先讓 IconHelper 丟掉快取）。需在畫面執行緒呼叫。</summary>
+        public static void ReloadIcon(string path)
+        {
+            var hit = new List<GridItem>();
+            lock (LiveSpecial)
+            {
+                LiveSpecial.RemoveAll(w => !w.TryGetTarget(out _));
+                foreach (var w in LiveSpecial)
+                    if (w.TryGetTarget(out var it) && string.Equals(it.FullPath, path, StringComparison.OrdinalIgnoreCase))
+                        hit.Add(it);
+            }
+            foreach (var it in hit)
+            {
+                var item = it;
+                IconHelper.LoadAsync(path, img => { if (img != null) item.Icon = img; });
+            }
         }
     }
 
@@ -91,6 +117,16 @@ namespace GridifyApp
         public static ImageSource TryGetCached(string path)
         {
             lock (Gate) return Cache.TryGetValue(path, out var img) ? img : null;
+        }
+
+        /// <summary>
+        /// 丟掉某個路徑的圖示快取，並讓畫面上用到它的項目重新載入。
+        /// 給「圖示本身會變」的系統圖示用（資源回收筒空／滿）。需在畫面執行緒呼叫。
+        /// </summary>
+        public static void Invalidate(string path)
+        {
+            lock (Gate) Cache.Remove(path);
+            GridItem.ReloadIcon(path);
         }
 
         public static void LoadAsync(string path, Action<ImageSource> done)
